@@ -1,0 +1,25 @@
+{
+  "name": "stillframe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Electron media center powered by FastAPI and mpv.",
+  "main": "src/main/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && NODE_ENV=development electron .\"",
+    "build": "vite build",
+    "start": "NODE_ENV=production electron ."
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^8.2.2",
+    "electron": "^31.0.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.3.1",
+    "wait-on": "^7.2.0"
+  },
+  "devDependencies": {}
+}
+

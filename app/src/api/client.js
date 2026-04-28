@@ -1,0 +1,59 @@
+const SERVER_URL = "http://127.0.0.1:8765";
+
+async function request(path, options = {}) {
+  const response = await fetch(`${SERVER_URL}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      message = body.detail || message;
+    } catch {
+      // Keep the HTTP status fallback.
+    }
+    throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+  return response.json();
+}
+
+export const api = {
+  health: () => request("/health"),
+  sources: () => request("/sources"),
+  addSource: (path, name) => request("/sources", {
+    method: "POST",
+    body: JSON.stringify({ path, name })
+  }),
+  browse: (path) => request(`/browse?path=${encodeURIComponent(path)}`),
+  play: (path, options = {}) => request("/play", {
+    method: "POST",
+    body: JSON.stringify({ path, ...options })
+  }),
+  playerState: () => request("/player/state"),
+  playerCommand: (command, value = null) => request("/player/command", {
+    method: "POST",
+    body: JSON.stringify({ command, value })
+  }),
+  subtitles: (mediaPath) => request(`/subtitles?media_path=${encodeURIComponent(mediaPath)}`),
+  favorites: () => request("/favorites"),
+  setFavorite: (path, title, favorite) => request("/favorites", {
+    method: "POST",
+    body: JSON.stringify({ path, title, favorite })
+  }),
+  history: () => request("/history"),
+  clearHistory: () => request("/history/clear", { method: "POST" }),
+  settings: () => request("/settings"),
+  setSetting: (key, value) => request("/settings", {
+    method: "POST",
+    body: JSON.stringify({ key, value })
+  })
+};
