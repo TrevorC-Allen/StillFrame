@@ -799,7 +799,32 @@ video::cue {
   color: #aaa38f;
 }
 
-.pathbar span {
+.view-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #343228;
+  border-radius: 8px;
+}
+
+.view-tab {
+  min-height: 32px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 10px;
+  background: #151511;
+  color: #999482;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.view-tab.active {
+  background: #cda85a;
+  color: #12110d;
+}
+
+.pathbar > span:not(.view-switch) {
   flex: 1;
   min-width: 120px;
   overflow: hidden;
@@ -887,6 +912,10 @@ video::cue {
 .file-row:hover {
   border-color: #36352e;
   background: #191915;
+}
+
+.file-row.offline {
+  color: #8f8878;
 }
 
 .row-main {

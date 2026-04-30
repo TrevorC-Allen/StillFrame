@@ -27,8 +27,8 @@ const api = {
     method: "POST",
     body: JSON.stringify({ path })
   }),
-  library: (search = "", sort = "recent") => {
-    const params = new URLSearchParams({ limit: "24", sort });
+  library: (search = "", sort = "recent", limit = 24) => {
+    const params = new URLSearchParams({ limit: String(limit), sort });
     if (search) params.set("search", search);
     return api.request(`/library?${params.toString()}`);
   },
@@ -54,12 +54,14 @@ const api = {
 const state = {
   sources: [],
   libraryItems: [],
+  libraryRows: [],
   history: [],
   favoriteItems: [],
   favorites: new Set(),
   subtitles: [],
   browse: null,
   browseError: null,
+  mainView: "folders",
   browserFilter: "",
   browserSort: "name",
   libraryFilter: "",
@@ -129,6 +131,8 @@ const els = {
   nowPlaying: document.querySelector("#now-playing"),
   playbackNote: document.querySelector("#playback-note"),
   favoriteButton: document.querySelector("#favorite-button"),
+  folderViewButton: document.querySelector("#folder-view-button"),
+  libraryViewButton: document.querySelector("#library-view-button"),
   backButton: document.querySelector("#back-button"),
   currentPath: document.querySelector("#current-path"),
   browserFilter: document.querySelector("#browser-filter"),
@@ -152,6 +156,7 @@ boot();
 async function boot() {
   loadPreferences();
   bindEvents();
+  setFolderSortOptions();
   updatePreviewControls();
   updateSubtitleDelayLabel();
   await refresh();
@@ -200,19 +205,32 @@ function bindEvents() {
     });
   });
 
+  els.folderViewButton.addEventListener("click", () => setMainView("folders"));
+  els.libraryViewButton.addEventListener("click", async () => {
+    await setMainView("library");
+  });
+
   els.libraryFilter.addEventListener("input", () => {
     state.libraryFilter = els.libraryFilter.value.trim();
+    els.browserFilter.value = state.libraryFilter;
     clearTimeout(state.librarySearchTimer);
     state.librarySearchTimer = setTimeout(() => {
-      refreshLibraryOnly().then(renderShelves).catch((error) => showError(error.message));
+      refreshLibraryOnly()
+        .then(() => {
+          renderShelves();
+          if (state.mainView === "library") renderBrowser();
+        })
+        .catch((error) => showError(error.message));
     }, 180);
   });
 
   els.librarySort.addEventListener("change", async () => {
     state.librarySort = els.librarySort.value;
+    els.browserSort.value = state.librarySort;
     await run(async () => {
       await refreshLibraryOnly();
       renderShelves();
+      if (state.mainView === "library") renderBrowser();
     });
   });
 
@@ -222,12 +240,30 @@ function bindEvents() {
     }
   });
   els.browserFilter.addEventListener("input", () => {
-    state.browserFilter = els.browserFilter.value.trim().toLowerCase();
-    renderBrowser();
+    if (state.mainView === "library") {
+      state.libraryFilter = els.browserFilter.value.trim();
+      els.libraryFilter.value = state.libraryFilter;
+      clearTimeout(state.librarySearchTimer);
+      state.librarySearchTimer = setTimeout(() => {
+        refreshLibraryRows().then(renderBrowser).catch((error) => showError(error.message));
+      }, 180);
+    } else {
+      state.browserFilter = els.browserFilter.value.trim().toLowerCase();
+      renderBrowser();
+    }
   });
-  els.browserSort.addEventListener("change", () => {
-    state.browserSort = els.browserSort.value;
-    renderBrowser();
+  els.browserSort.addEventListener("change", async () => {
+    if (state.mainView === "library") {
+      state.librarySort = els.browserSort.value;
+      els.librarySort.value = state.librarySort;
+      await run(async () => {
+        await refreshLibraryRows();
+        renderBrowser();
+      });
+    } else {
+      state.browserSort = els.browserSort.value;
+      renderBrowser();
+    }
   });
 
   els.favoriteButton.addEventListener("click", async () => {
@@ -361,7 +397,11 @@ async function scanLibrary() {
   if (label) label.textContent = "Scanning...";
   await run(async () => {
     const result = await api.scanLibrary();
-    state.libraryItems = (await api.library()).items || [];
+    await refreshLibraryOnly();
+    if (state.mainView === "library") {
+      await refreshLibraryRows();
+      renderBrowser();
+    }
     renderShelves();
     els.playbackNote.textContent = `Indexed ${result.items_indexed} video${result.items_indexed === 1 ? "" : "s"} from ${result.sources_scanned} source${result.sources_scanned === 1 ? "" : "s"}.`;
   });
@@ -369,9 +409,35 @@ async function scanLibrary() {
   els.scanLibraryButton.disabled = false;
 }
 
+async function setMainView(view) {
+  state.mainView = view;
+  els.folderViewButton.classList.toggle("active", view === "folders");
+  els.libraryViewButton.classList.toggle("active", view === "library");
+
+  if (view === "library") {
+    els.browserFilter.value = state.libraryFilter;
+    setLibrarySortOptions();
+    els.browserSort.value = state.librarySort;
+    await run(async () => {
+      await refreshLibraryRows();
+      renderBrowser();
+    });
+    return;
+  }
+
+  els.browserFilter.value = state.browserFilter;
+  setFolderSortOptions();
+  els.browserSort.value = state.browserSort;
+  renderBrowser();
+}
+
 async function openFolder(path) {
   try {
     hideError();
+    state.mainView = "folders";
+    els.folderViewButton.classList.add("active");
+    els.libraryViewButton.classList.remove("active");
+    setFolderSortOptions();
     state.browse = await api.browse(path);
     state.browseError = null;
     state.browserFilter = "";
@@ -386,7 +452,7 @@ async function openFolder(path) {
 }
 
 async function play(item) {
-  if (item.media_available === false) {
+  if (item.media_available === false || item.available === false) {
     showError(`${displayTitle(item)} is offline. Reconnect the source and refresh StillFrame.`);
     return;
   }
@@ -417,7 +483,7 @@ async function play(item) {
 }
 
 async function openInMpv(item) {
-  if (item.media_available === false) {
+  if (item.media_available === false || item.available === false) {
     showError(`${displayTitle(item)} is offline. Reconnect the source and refresh StillFrame.`);
     return;
   }
@@ -454,6 +520,11 @@ async function toggleFavorite(item) {
 async function refreshLibraryOnly() {
   const library = await api.library(state.libraryFilter, state.librarySort);
   state.libraryItems = library.items || [];
+}
+
+async function refreshLibraryRows() {
+  const library = await api.library(state.libraryFilter, state.librarySort, 200);
+  state.libraryRows = library.items || [];
 }
 
 async function refreshFavoritesOnly() {
@@ -601,6 +672,11 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
 }
 
 function renderBrowser() {
+  if (state.mainView === "library") {
+    renderIndexedLibrary();
+    return;
+  }
+
   if (state.browseError) {
     els.title.textContent = state.browseError.path.split("/").filter(Boolean).at(-1) || state.browseError.path;
     els.currentPath.textContent = state.browseError.path;
@@ -700,6 +776,72 @@ function renderBrowser() {
   }
 }
 
+function renderIndexedLibrary() {
+  els.title.textContent = "Library";
+  els.currentPath.textContent = state.libraryFilter ? `Indexed library matching "${state.libraryFilter}"` : "Indexed library";
+  els.backButton.disabled = true;
+  els.items.innerHTML = "";
+
+  if (state.libraryRows.length === 0) {
+    renderEmptyBrowser(
+      state.libraryFilter ? "No library matches" : "Library index is empty",
+      state.libraryFilter
+        ? "Nothing indexed matches the current search."
+        : "Scan your connected sources to build the local library index.",
+      state.libraryFilter ? "Clear Search" : "Scan Library",
+      async () => {
+        if (state.libraryFilter) {
+          state.libraryFilter = "";
+          els.libraryFilter.value = "";
+          els.browserFilter.value = "";
+          await refreshLibraryRows();
+          renderBrowser();
+        } else {
+          await scanLibrary();
+        }
+      }
+    );
+    return;
+  }
+
+  for (const item of state.libraryRows) {
+    const online = item.available !== false;
+    const row = document.createElement("div");
+    row.className = online ? "file-row" : "file-row offline";
+
+    const main = document.createElement("button");
+    main.className = "row-main";
+    main.innerHTML = `
+      <span class="icon">${icon("film")}</span>
+      <span class="row-title">
+        <strong>${escapeHtml(displayTitle(item))}</strong>
+        <small>${escapeHtml(librarySubtitle(item))}</small>
+      </span>
+    `;
+    main.addEventListener("click", () => play(item));
+
+    const quality = document.createElement("span");
+    quality.className = "quality-chip";
+    quality.textContent = online ? item.quality || "Video" : "Offline";
+
+    const mpvAction = document.createElement("button");
+    mpvAction.className = "icon-action";
+    mpvAction.innerHTML = `${icon("mpv")}<span>mpv</span>`;
+    mpvAction.disabled = !online || !state.health?.mpv_available;
+    mpvAction.title = state.health?.mpv_available ? "Open in mpv" : "mpv is not installed";
+    mpvAction.addEventListener("click", () => openInMpv(item));
+
+    const favoriteAction = document.createElement("button");
+    favoriteAction.className = state.favorites.has(item.path) || item.favorite ? "icon-action starred" : "icon-action";
+    favoriteAction.innerHTML = `${icon("star")}<span>${state.favorites.has(item.path) || item.favorite ? "Starred" : "Star"}</span>`;
+    favoriteAction.disabled = !online;
+    favoriteAction.addEventListener("click", () => toggleFavorite(item));
+
+    row.append(main, quality, mpvAction, favoriteAction);
+    els.items.append(row);
+  }
+}
+
 function sortedBrowserItems(items) {
   const query = state.browserFilter;
   const filtered = query
@@ -725,6 +867,9 @@ function sortedBrowserItems(items) {
 }
 
 function renderDisconnectedSource(source) {
+  state.mainView = "folders";
+  els.folderViewButton.classList.add("active");
+  els.libraryViewButton.classList.remove("active");
   state.browse = null;
   state.browseError = {
     path: source.path,
@@ -751,6 +896,31 @@ function renderEmptyBrowser(title, message, actionLabel, action) {
     empty.querySelector("div").append(button);
   }
   els.items.append(empty);
+}
+
+function setFolderSortOptions() {
+  setSortOptions([
+    ["name", "Name"],
+    ["recent", "Recently Modified"],
+    ["size", "Size"],
+    ["type", "Type"],
+  ]);
+}
+
+function setLibrarySortOptions() {
+  setSortOptions([
+    ["recent", "Recent"],
+    ["title", "Title"],
+    ["year", "Year"],
+    ["size", "Size"],
+  ]);
+}
+
+function setSortOptions(options) {
+  els.browserSort.innerHTML = "";
+  for (const [value, label] of options) {
+    els.browserSort.append(new Option(label, value));
+  }
 }
 
 function renderFavoriteButton() {
@@ -901,6 +1071,20 @@ function rowSubtitle(item) {
     parts.push(`S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`);
   }
   if (item.progress) parts.push(`${Math.round(item.progress * 100)}% watched`);
+  return parts.join(" · ") || item.name || "";
+}
+
+function librarySubtitle(item) {
+  const parts = [];
+  if (item.year) parts.push(item.year);
+  if (item.season && item.episode) {
+    parts.push(`S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`);
+  }
+  if (item.position && item.duration) {
+    parts.push(`${Math.round((item.position / item.duration) * 100)}% watched`);
+  }
+  const folder = item.source_path ? item.source_path.split("/").filter(Boolean).at(-1) : "";
+  if (folder) parts.push(folder);
   return parts.join(" · ") || item.name || "";
 }
 
