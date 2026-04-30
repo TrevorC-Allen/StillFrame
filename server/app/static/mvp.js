@@ -816,6 +816,7 @@ function renderIndexedLibrary() {
       <span class="row-title">
         <strong>${escapeHtml(displayTitle(item))}</strong>
         <small>${escapeHtml(librarySubtitle(item))}</small>
+        ${item.overview ? `<small class="overview-line">${escapeHtml(item.overview)}</small>` : ""}
       </span>
     `;
     main.addEventListener("click", () => play(item));

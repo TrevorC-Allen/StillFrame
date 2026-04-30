@@ -14,6 +14,7 @@
 - Source availability checks, disconnected path empty states, and clear history.
 - Browser preview resume, current-folder filter/sort, and enriched poster shelves from local artwork.
 - Local library scan/index with a Web MVP Library shelf and full indexed Library view.
+- Local filename-based poster/overview generation with optional TMDb enrichment.
 
 ## v1.1
 

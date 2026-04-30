@@ -101,6 +101,9 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     assert scan_response.json()["items_indexed"] == 1
     assert library_response.status_code == 200
     assert library_response.json()["items"][0]["name"] == "Sample.2025.1080p.mp4"
+    assert library_response.json()["items"][0]["artwork_url"] == f"/media/artwork?path={poster}"
+    assert library_response.json()["items"][0]["overview"]
+    assert library_response.json()["items"][0]["metadata_source"] in {"local", "tmdb"}
     assert browse_response.status_code == 200
     sample_item = next(item for item in browse_response.json()["items"] if item["name"] == "Sample.2025.1080p.mp4")
     assert sample_item["display_title"] == "Sample"

@@ -903,7 +903,7 @@ video::cue {
   grid-template-columns: minmax(0, 1fr) 86px 70px 82px;
   align-items: center;
   gap: 10px;
-  min-height: 54px;
+  min-height: 58px;
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 0 8px;
@@ -964,6 +964,10 @@ video::cue {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.row-title .overview-line {
+  color: #b6af9e;
 }
 
 .quality-chip {

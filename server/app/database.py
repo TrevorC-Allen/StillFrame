@@ -52,6 +52,13 @@ CREATE TABLE IF NOT EXISTS media_items (
     size INTEGER,
     modified_at REAL,
     artwork_url TEXT,
+    overview TEXT,
+    poster_path TEXT,
+    backdrop_url TEXT,
+    tmdb_id INTEGER,
+    media_type TEXT,
+    metadata_source TEXT,
+    metadata_updated_at TEXT,
     available INTEGER NOT NULL DEFAULT 1,
     last_seen_at TEXT NOT NULL,
     FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE SET NULL
@@ -71,6 +78,25 @@ class Database:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             connection.executescript(SCHEMA)
+            self._migrate_media_items(connection)
+
+    def _migrate_media_items(self, connection: sqlite3.Connection) -> None:
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(media_items)").fetchall()
+        }
+        additions = {
+            "overview": "TEXT",
+            "poster_path": "TEXT",
+            "backdrop_url": "TEXT",
+            "tmdb_id": "INTEGER",
+            "media_type": "TEXT",
+            "metadata_source": "TEXT",
+            "metadata_updated_at": "TEXT",
+        }
+        for name, column_type in additions.items():
+            if name not in columns:
+                connection.execute(f"ALTER TABLE media_items ADD COLUMN {name} {column_type}")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

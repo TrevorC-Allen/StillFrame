@@ -9,6 +9,7 @@ StillFrame has three local layers:
 - FastAPI owns SQLite, directory browsing, local subtitle matching, playback history, and mpv JSON IPC.
 - Source records include live availability metadata so disconnected mounted paths can be shown without corrupting saved library state.
 - The library index is a local SQLite projection of connected media sources. It is rebuilt by scanning sources and is safe to regenerate.
+- Metadata enrichment is local-first. Scans generate poster SVGs and file-name-based summaries without network access; TMDb lookup is used only when credentials are provided through environment variables.
 
 ## Playback
 
@@ -28,7 +29,7 @@ SQLite stores:
 - `sources`: local or mounted folders.
 - `playback_states`: progress, selected tracks, and recent history.
 - `favorites`: favorite files.
-- `media_items`: indexed local videos, parsed title metadata, size, modified time, artwork URL, and availability.
+- `media_items`: indexed local videos, parsed title metadata, overview, poster path, size, modified time, artwork URL, metadata source, and availability.
 - `settings`: simple local preferences.
 
 All data remains local.

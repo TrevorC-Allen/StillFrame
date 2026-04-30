@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from app.config import ARTWORK_EXTENSIONS, VIDEO_EXTENSIONS
 from app.services.library_service import LibraryService, utc_now
+from app.services.metadata_service import MetadataService
 
 QUALITY_PATTERN = re.compile(r"\b(2160p|4k|1080p|720p|480p|hdr10\+?|dolby[ ._-]?vision|dv|webrip|bluray|bdrip)\b", re.IGNORECASE)
 YEAR_PATTERN = re.compile(r"(?:^|[ ._\-\[(])((?:19|20)\d{2})(?:[ ._\-\])]|$)")
@@ -41,8 +42,9 @@ TRASH_TOKENS = {
 
 
 class MediaService:
-    def __init__(self, library: LibraryService) -> None:
+    def __init__(self, library: LibraryService, metadata: Optional[MetadataService] = None) -> None:
         self.library = library
+        self.metadata = metadata or MetadataService()
 
     def is_video(self, path: Path) -> bool:
         return path.suffix.lower() in VIDEO_EXTENSIONS
@@ -113,21 +115,29 @@ class MediaService:
                 except OSError:
                     continue
                 metadata = self.describe_media(media_path)
+                generated = self.metadata.enrich(media_path, metadata)
                 batch.append(
                     {
                         "path": str(media_path),
                         "source_id": int(source["id"]),
                         "source_path": str(root),
                         "name": media_path.name,
-                        "title": metadata.get("display_title") or media_path.stem,
-                        "display_title": metadata.get("display_title"),
-                        "year": metadata.get("year"),
+                        "title": generated.get("title") or metadata.get("display_title") or media_path.stem,
+                        "display_title": generated.get("display_title") or metadata.get("display_title"),
+                        "year": generated.get("year") or metadata.get("year"),
                         "season": metadata.get("season"),
                         "episode": metadata.get("episode"),
                         "quality": metadata.get("quality"),
                         "size": stat.st_size,
                         "modified_at": stat.st_mtime,
-                        "artwork_url": metadata.get("artwork_url"),
+                        "artwork_url": generated.get("artwork_url") or metadata.get("artwork_url"),
+                        "overview": generated.get("overview"),
+                        "poster_path": generated.get("poster_path"),
+                        "backdrop_url": generated.get("backdrop_url"),
+                        "tmdb_id": generated.get("tmdb_id"),
+                        "media_type": generated.get("media_type"),
+                        "metadata_source": generated.get("metadata_source"),
+                        "metadata_updated_at": generated.get("metadata_updated_at"),
                         "available": 1,
                         "last_seen_at": now,
                     }

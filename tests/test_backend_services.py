@@ -116,6 +116,10 @@ def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
     assert names == {"Arrival.2016.2160p.mkv", "Show.S01E02.1080p.mp4"}
     assert next(item for item in items if item["name"] == "Arrival.2016.2160p.mkv")["year"] == 2016
     assert next(item for item in items if item["name"] == "Show.S01E02.1080p.mp4")["episode"] == 2
+    arrival = next(item for item in items if item["name"] == "Arrival.2016.2160p.mkv")
+    assert arrival["overview"]
+    assert arrival["metadata_source"] in {"local", "tmdb"}
+    assert arrival["artwork_url"].startswith("/media/artwork?path=")
 
 
 def test_subtitle_matching_and_encoding_detection(tmp_path: Path) -> None:

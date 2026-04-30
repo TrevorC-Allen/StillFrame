@@ -107,12 +107,16 @@ class LibraryService:
                 INSERT INTO media_items (
                     path, source_id, source_path, name, title, display_title,
                     year, season, episode, quality, size, modified_at,
-                    artwork_url, available, last_seen_at
+                    artwork_url, overview, poster_path, backdrop_url, tmdb_id,
+                    media_type, metadata_source, metadata_updated_at, available,
+                    last_seen_at
                 )
                 VALUES (
                     :path, :source_id, :source_path, :name, :title, :display_title,
                     :year, :season, :episode, :quality, :size, :modified_at,
-                    :artwork_url, :available, :last_seen_at
+                    :artwork_url, :overview, :poster_path, :backdrop_url, :tmdb_id,
+                    :media_type, :metadata_source, :metadata_updated_at, :available,
+                    :last_seen_at
                 )
                 ON CONFLICT(path) DO UPDATE SET
                     source_id = excluded.source_id,
@@ -127,6 +131,13 @@ class LibraryService:
                     size = excluded.size,
                     modified_at = excluded.modified_at,
                     artwork_url = excluded.artwork_url,
+                    overview = excluded.overview,
+                    poster_path = excluded.poster_path,
+                    backdrop_url = excluded.backdrop_url,
+                    tmdb_id = excluded.tmdb_id,
+                    media_type = excluded.media_type,
+                    metadata_source = excluded.metadata_source,
+                    metadata_updated_at = excluded.metadata_updated_at,
                     available = excluded.available,
                     last_seen_at = excluded.last_seen_at
                 """,

@@ -7,6 +7,7 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 - Local folders and Finder-mounted NAS paths.
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
 - Local library indexing for faster shelves, full-library search, and whole-library views.
+- Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
 - Local subtitles matched from the media folder.
 - Source availability checks for disconnected NAS paths.
 - Browser preview resumes unfinished videos from saved progress.
@@ -27,6 +28,16 @@ python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
+
+Optional real metadata:
+
+```bash
+export STILLFRAME_TMDB_API_KEY="your_tmdb_api_key"
+# or
+export STILLFRAME_TMDB_BEARER_TOKEN="your_tmdb_read_access_token"
+```
+
+Without TMDb credentials, StillFrame stays offline and generates a local poster plus a file-name-based description. With credentials, library scans cache TMDb posters and overviews locally. StillFrame uses the TMDb API but is not endorsed or certified by TMDb.
 
 ## Run
 
