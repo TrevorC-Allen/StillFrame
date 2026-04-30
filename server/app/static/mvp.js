@@ -27,7 +27,11 @@ const api = {
     method: "POST",
     body: JSON.stringify({ path })
   }),
-  library: () => api.request("/library?limit=24&sort=recent"),
+  library: (search = "", sort = "recent") => {
+    const params = new URLSearchParams({ limit: "24", sort });
+    if (search) params.set("search", search);
+    return api.request(`/library?${params.toString()}`);
+  },
   scanLibrary: () => api.request("/library/scan", {
     method: "POST",
     body: JSON.stringify({})
@@ -58,6 +62,9 @@ const state = {
   browseError: null,
   browserFilter: "",
   browserSort: "name",
+  libraryFilter: "",
+  librarySort: "recent",
+  librarySearchTimer: null,
   currentMedia: null,
   resumePosition: 0,
   resumeApplied: false,
@@ -130,6 +137,8 @@ const els = {
   libraryShelf: document.querySelector("#library-shelf"),
   libraryItems: document.querySelector("#library-items"),
   libraryCount: document.querySelector("#library-count"),
+  libraryFilter: document.querySelector("#library-filter"),
+  librarySort: document.querySelector("#library-sort"),
   continueShelf: document.querySelector("#continue-shelf"),
   continueItems: document.querySelector("#continue-items"),
   continueCount: document.querySelector("#continue-count"),
@@ -187,6 +196,22 @@ function bindEvents() {
       await api.clearHistory();
       state.history = [];
       renderHistory();
+      renderShelves();
+    });
+  });
+
+  els.libraryFilter.addEventListener("input", () => {
+    state.libraryFilter = els.libraryFilter.value.trim();
+    clearTimeout(state.librarySearchTimer);
+    state.librarySearchTimer = setTimeout(() => {
+      refreshLibraryOnly().then(renderShelves).catch((error) => showError(error.message));
+    }, 180);
+  });
+
+  els.librarySort.addEventListener("change", async () => {
+    state.librarySort = els.librarySort.value;
+    await run(async () => {
+      await refreshLibraryOnly();
       renderShelves();
     });
   });
@@ -427,7 +452,7 @@ async function toggleFavorite(item) {
 }
 
 async function refreshLibraryOnly() {
-  const library = await api.library();
+  const library = await api.library(state.libraryFilter, state.librarySort);
   state.libraryItems = library.items || [];
 }
 

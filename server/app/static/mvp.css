@@ -391,6 +391,31 @@ h2 {
   font-size: 13px;
 }
 
+.library-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.library-filter,
+.library-sort {
+  height: 30px;
+  border: 1px solid #3a3932;
+  border-radius: 7px;
+  background: #161613;
+  color: #f4f1e9;
+  font-size: 12px;
+}
+
+.library-filter {
+  width: min(220px, 20vw);
+  padding: 0 9px;
+}
+
+.library-sort {
+  padding: 0 8px;
+}
+
 .poster-row {
   display: grid;
   grid-auto-columns: minmax(142px, 160px);

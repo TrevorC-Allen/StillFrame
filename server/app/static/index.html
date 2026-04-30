@@ -75,7 +75,16 @@
           <div class="shelf" id="library-shelf" hidden>
             <div class="section-head">
               <h2>Library</h2>
-              <span id="library-count"></span>
+              <span class="library-tools">
+                <input id="library-filter" class="library-filter" type="search" placeholder="Search library" />
+                <select id="library-sort" class="library-sort" aria-label="Sort library">
+                  <option value="recent">Recent</option>
+                  <option value="title">Title</option>
+                  <option value="year">Year</option>
+                  <option value="size">Size</option>
+                </select>
+                <span id="library-count"></span>
+              </span>
             </div>
             <div id="library-items" class="poster-row"></div>
           </div>
