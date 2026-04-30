@@ -10,7 +10,7 @@ from app.config import DB_PATH, ROOT_DIR
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from app.routes import browse, dialog, favorites, history, media, player, settings, sources  # noqa: E402
+from app.routes import browse, dialog, favorites, history, library, media, player, settings, sources  # noqa: E402
 from app.state import dependency_status, initialize  # noqa: E402
 
 
@@ -49,6 +49,7 @@ def health() -> dict:
 app.include_router(sources.router)
 app.include_router(browse.router)
 app.include_router(dialog.router)
+app.include_router(library.router)
 app.include_router(media.router)
 app.include_router(player.router)
 app.include_router(favorites.router)

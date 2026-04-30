@@ -120,9 +120,12 @@ input[type="range"] {
 
 .source-actions {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.primary-action {
+.primary-action,
+.secondary-action {
   display: flex;
   width: 100%;
   min-height: 42px;
@@ -139,6 +142,17 @@ input[type="range"] {
 .primary-action:hover {
   border-color: #d9bb78;
   background: #d9bb78;
+}
+
+.secondary-action {
+  border-color: #343228;
+  background: #25241f;
+  color: #d2cdc0;
+}
+
+.secondary-action:hover {
+  border-color: #46443a;
+  background: #323027;
 }
 
 .source-form {

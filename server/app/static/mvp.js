@@ -27,6 +27,11 @@ const api = {
     method: "POST",
     body: JSON.stringify({ path })
   }),
+  library: () => api.request("/library?limit=24&sort=recent"),
+  scanLibrary: () => api.request("/library/scan", {
+    method: "POST",
+    body: JSON.stringify({})
+  }),
   browse: (path) => api.request(`/browse?path=${encodeURIComponent(path)}`),
   subtitles: (mediaPath) => api.request(`/subtitles?media_path=${encodeURIComponent(mediaPath)}`),
   history: () => api.request("/history"),
@@ -44,6 +49,7 @@ const api = {
 
 const state = {
   sources: [],
+  libraryItems: [],
   history: [],
   favoriteItems: [],
   favorites: new Set(),
@@ -86,6 +92,7 @@ const els = {
   error: document.querySelector("#error"),
   sourceForm: document.querySelector("#source-form"),
   chooseFolderButton: document.querySelector("#choose-folder-button"),
+  scanLibraryButton: document.querySelector("#scan-library-button"),
   sourcePath: document.querySelector("#source-path"),
   refreshSourcesButton: document.querySelector("#refresh-sources-button"),
   sources: document.querySelector("#sources"),
@@ -120,6 +127,9 @@ const els = {
   browserFilter: document.querySelector("#browser-filter"),
   browserSort: document.querySelector("#browser-sort"),
   items: document.querySelector("#items"),
+  libraryShelf: document.querySelector("#library-shelf"),
+  libraryItems: document.querySelector("#library-items"),
+  libraryCount: document.querySelector("#library-count"),
   continueShelf: document.querySelector("#continue-shelf"),
   continueItems: document.querySelector("#continue-items"),
   continueCount: document.querySelector("#continue-count"),
@@ -164,6 +174,10 @@ function bindEvents() {
   els.refreshSourcesButton.addEventListener("click", async () => {
     state.browseError = null;
     await refresh();
+  });
+
+  els.scanLibraryButton.addEventListener("click", async () => {
+    await scanLibrary();
   });
 
   els.clearHistoryButton.addEventListener("click", async () => {
@@ -288,14 +302,16 @@ function bindEvents() {
 
 async function refresh() {
   await run(async () => {
-    const [health, sources, history, favorites] = await Promise.all([
+    const [health, sources, library, history, favorites] = await Promise.all([
       api.health(),
       api.sources(),
+      api.library(),
       api.history(),
       api.favorites()
     ]);
     renderHealth(health);
     state.sources = sources;
+    state.libraryItems = library.items || [];
     state.history = history;
     state.favoriteItems = favorites;
     state.favorites = new Set(favorites.map((item) => item.path));
@@ -311,6 +327,21 @@ async function refresh() {
       }
     }
   });
+}
+
+async function scanLibrary() {
+  const previousLabel = els.scanLibraryButton.querySelector("span")?.textContent || "Scan Library";
+  els.scanLibraryButton.disabled = true;
+  const label = els.scanLibraryButton.querySelector("span");
+  if (label) label.textContent = "Scanning...";
+  await run(async () => {
+    const result = await api.scanLibrary();
+    state.libraryItems = (await api.library()).items || [];
+    renderShelves();
+    els.playbackNote.textContent = `Indexed ${result.items_indexed} video${result.items_indexed === 1 ? "" : "s"} from ${result.sources_scanned} source${result.sources_scanned === 1 ? "" : "s"}.`;
+  });
+  if (label) label.textContent = previousLabel;
+  els.scanLibraryButton.disabled = false;
 }
 
 async function openFolder(path) {
@@ -388,10 +419,16 @@ async function toggleFavorite(item) {
     else state.favorites.delete(item.path);
     renderBrowser();
     renderHistory();
+    await refreshLibraryOnly();
     await refreshFavoritesOnly();
     renderShelves();
     renderFavoriteButton();
   });
+}
+
+async function refreshLibraryOnly() {
+  const library = await api.library();
+  state.libraryItems = library.items || [];
 }
 
 async function refreshFavoritesOnly() {
@@ -474,6 +511,13 @@ function renderShelves() {
     .filter((item) => item.media_available !== false && item.duration && !item.finished && item.position > 5)
     .slice(0, 10);
 
+  renderPosterShelf(
+    els.libraryShelf,
+    els.libraryItems,
+    els.libraryCount,
+    state.libraryItems.filter((item) => item.available !== false).slice(0, 12),
+    "Play"
+  );
   renderPosterShelf(
     els.continueShelf,
     els.continueItems,

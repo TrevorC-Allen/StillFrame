@@ -13,6 +13,7 @@
 - Subtitle size and delay controls in Web MVP.
 - Source availability checks, disconnected path empty states, and clear history.
 - Browser preview resume, current-folder filter/sort, and enriched poster shelves from local artwork.
+- Local library scan/index with a Web MVP Library shelf.
 
 ## v1.1
 
@@ -23,7 +24,7 @@
 ## v1.2
 
 - Optional poster cache from local artwork files.
-- Optional folder scanner for large libraries.
+- Incremental folder scanner for large libraries.
 - Multi-window playback control refinement.
 
 ## Later

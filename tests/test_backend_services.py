@@ -96,6 +96,28 @@ def test_local_artwork_discovery(tmp_path: Path) -> None:
     assert enriched["artwork_url"] == f"/media/artwork?path={poster}"
 
 
+def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
+    library, media = make_services(tmp_path)
+    movie = tmp_path / "Arrival.2016.2160p.mkv"
+    episode_dir = tmp_path / "Show"
+    episode = episode_dir / "Show.S01E02.1080p.mp4"
+    episode_dir.mkdir()
+    movie.write_text("fake video", encoding="utf-8")
+    episode.write_text("fake video", encoding="utf-8")
+    (tmp_path / "Notes.txt").write_text("not media", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+
+    summary = media.scan_sources(source_id=source["id"])
+    items = library.list_media_items(sort="title")
+    names = {item["name"] for item in items}
+
+    assert summary["sources_scanned"] == 1
+    assert summary["items_indexed"] == 2
+    assert names == {"Arrival.2016.2160p.mkv", "Show.S01E02.1080p.mp4"}
+    assert next(item for item in items if item["name"] == "Arrival.2016.2160p.mkv")["year"] == 2016
+    assert next(item for item in items if item["name"] == "Show.S01E02.1080p.mp4")["episode"] == 2
+
+
 def test_subtitle_matching_and_encoding_detection(tmp_path: Path) -> None:
     movie = tmp_path / "Arrival.mkv"
     subtitle = tmp_path / "Arrival.en.srt"

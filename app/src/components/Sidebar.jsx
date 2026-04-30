@@ -6,7 +6,8 @@ export function Sidebar({
   currentView,
   onAddFolder,
   onOpenSource,
-  onViewChange
+  onViewChange,
+  onScanLibrary
 }) {
   return (
     <aside className="sidebar">
@@ -18,6 +19,13 @@ export function Sidebar({
       </div>
 
       <nav className="nav-group">
+        <button
+          className={currentView === "index" ? "nav-item active" : "nav-item"}
+          onClick={() => onViewChange("index")}
+        >
+          <FolderOpen size={18} />
+          <span>Library</span>
+        </button>
         <button
           className={currentView === "history" ? "nav-item active" : "nav-item"}
           onClick={() => onViewChange("history")}
@@ -43,9 +51,14 @@ export function Sidebar({
 
       <div className="source-header">
         <span>Sources</span>
-        <button className="icon-button" onClick={onAddFolder} title="Add folder">
-          <Plus size={17} />
-        </button>
+        <span className="source-tools">
+          <button className="icon-button" onClick={onScanLibrary} title="Scan library">
+            <FolderOpen size={17} />
+          </button>
+          <button className="icon-button" onClick={onAddFolder} title="Add folder">
+            <Plus size={17} />
+          </button>
+        </span>
       </div>
 
       <div className="source-list">

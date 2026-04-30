@@ -37,6 +37,29 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS media_items (
+    path TEXT PRIMARY KEY,
+    source_id INTEGER,
+    source_path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    display_title TEXT,
+    year INTEGER,
+    season INTEGER,
+    episode INTEGER,
+    quality TEXT,
+    size INTEGER,
+    modified_at REAL,
+    artwork_url TEXT,
+    available INTEGER NOT NULL DEFAULT 1,
+    last_seen_at TEXT NOT NULL,
+    FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_source_id ON media_items(source_id);
+CREATE INDEX IF NOT EXISTS idx_media_items_title ON media_items(title COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS idx_media_items_modified_at ON media_items(modified_at);
 """
 
 
@@ -58,4 +81,3 @@ class Database:
             connection.commit()
         finally:
             connection.close()
-

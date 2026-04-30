@@ -28,6 +28,15 @@
             </svg>
             <span>Choose Folder</span>
           </button>
+          <button id="scan-library-button" class="secondary-action" type="button">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5.5h16"/>
+              <path d="M4 12h16"/>
+              <path d="M4 18.5h10"/>
+              <path d="m17 16 3 3-3 3"/>
+            </svg>
+            <span>Scan Library</span>
+          </button>
         </div>
 
         <form id="source-form" class="source-form compact">
@@ -63,6 +72,14 @@
         <div id="error" class="error" hidden></div>
 
         <section class="shelves">
+          <div class="shelf" id="library-shelf" hidden>
+            <div class="section-head">
+              <h2>Library</h2>
+              <span id="library-count"></span>
+            </div>
+            <div id="library-items" class="poster-row"></div>
+          </div>
+
           <div class="shelf" id="continue-shelf" hidden>
             <div class="section-head">
               <h2>Continue Watching</h2>

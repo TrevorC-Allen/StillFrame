@@ -28,6 +28,8 @@ def test_web_mvp_home_and_health() -> None:
     assert "subtitle-delay-value" in home.text
     assert "clear-history-button" in home.text
     assert "refresh-sources-button" in home.text
+    assert "scan-library-button" in home.text
+    assert "library-shelf" in home.text
     assert "browser-filter" in home.text
     assert "browser-sort" in home.text
     assert "forward-button" in home.text
@@ -54,6 +56,8 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
 
     with TestClient(app) as client:
         source_response = client.post("/sources", json={"path": str(tmp_path)})
+        scan_response = client.post("/library/scan", json={"source_id": source_response.json()["id"]})
+        library_response = client.get("/library", params={"search": "Sample"})
         browse_response = client.get("/browse", params={"path": str(tmp_path)})
         stream_response = client.get(
             "/media/stream",
@@ -89,6 +93,10 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
 
     assert source_response.status_code == 200
     assert source_response.json()["available"] is True
+    assert scan_response.status_code == 200
+    assert scan_response.json()["items_indexed"] == 1
+    assert library_response.status_code == 200
+    assert library_response.json()["items"][0]["name"] == "Sample.2025.1080p.mp4"
     assert browse_response.status_code == 200
     sample_item = next(item for item in browse_response.json()["items"] if item["name"] == "Sample.2025.1080p.mp4")
     assert sample_item["display_title"] == "Sample"

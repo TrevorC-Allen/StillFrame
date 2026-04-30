@@ -33,6 +33,11 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ path, name })
   }),
+  library: () => request("/library?limit=100&sort=recent"),
+  scanLibrary: () => request("/library/scan", {
+    method: "POST",
+    body: JSON.stringify({})
+  }),
   browse: (path) => request(`/browse?path=${encodeURIComponent(path)}`),
   play: (path, options = {}) => request("/play", {
     method: "POST",

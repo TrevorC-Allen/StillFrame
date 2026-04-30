@@ -126,6 +126,11 @@ class PlaybackUpdate(BaseModel):
     finished: bool = False
 
 
+class LibraryScanRequest(BaseModel):
+    source_id: Optional[int] = None
+    limit: int = Field(default=5000, ge=1, le=50000)
+
+
 class SettingUpdate(BaseModel):
     key: str
     value: str

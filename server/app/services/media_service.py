@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.config import ARTWORK_EXTENSIONS, VIDEO_EXTENSIONS
-from app.services.library_service import LibraryService
+from app.services.library_service import LibraryService, utc_now
 
 QUALITY_PATTERN = re.compile(r"\b(2160p|4k|1080p|720p|480p|hdr10\+?|dolby[ ._-]?vision|dv|webrip|bluray|bdrip)\b", re.IGNORECASE)
 YEAR_PATTERN = re.compile(r"(?:^|[ ._\-\[(])((?:19|20)\d{2})(?:[ ._\-\])]|$)")
@@ -84,6 +84,82 @@ class MediaService:
             enriched["media_available"] = False
             enriched["last_error"] = str(exc)
         return enriched
+
+    def scan_sources(self, source_id: Optional[int] = None, limit: int = 5000) -> dict[str, Any]:
+        sources = self.library.list_sources()
+        if source_id is not None:
+            sources = [source for source in sources if source["id"] == source_id]
+            if not sources:
+                raise FileNotFoundError(f"Media source does not exist: {source_id}")
+
+        scanned_sources = 0
+        skipped_sources = 0
+        indexed_items = 0
+        now = utc_now()
+
+        for source in sources:
+            if source.get("available") is False:
+                skipped_sources += 1
+                continue
+
+            root = Path(source["path"])
+            self.library.mark_source_media_unavailable(int(source["id"]))
+            batch: list[dict[str, Any]] = []
+            for media_path in self._walk_video_files(root):
+                if indexed_items + len(batch) >= limit:
+                    break
+                try:
+                    stat = media_path.stat()
+                except OSError:
+                    continue
+                metadata = self.describe_media(media_path)
+                batch.append(
+                    {
+                        "path": str(media_path),
+                        "source_id": int(source["id"]),
+                        "source_path": str(root),
+                        "name": media_path.name,
+                        "title": metadata.get("display_title") or media_path.stem,
+                        "display_title": metadata.get("display_title"),
+                        "year": metadata.get("year"),
+                        "season": metadata.get("season"),
+                        "episode": metadata.get("episode"),
+                        "quality": metadata.get("quality"),
+                        "size": stat.st_size,
+                        "modified_at": stat.st_mtime,
+                        "artwork_url": metadata.get("artwork_url"),
+                        "available": 1,
+                        "last_seen_at": now,
+                    }
+                )
+
+            indexed_items += self.library.upsert_media_items(batch)
+            scanned_sources += 1
+            if indexed_items >= limit:
+                break
+
+        return {
+            "sources_scanned": scanned_sources,
+            "sources_skipped": skipped_sources,
+            "items_indexed": indexed_items,
+            "limit": limit,
+        }
+
+    def _walk_video_files(self, root: Path):
+        stack = [root]
+        while stack:
+            directory = stack.pop()
+            try:
+                children = sorted(directory.iterdir(), key=lambda child: child.name.lower())
+            except OSError:
+                continue
+            for child in children:
+                if child.name.startswith("."):
+                    continue
+                if child.is_dir():
+                    stack.append(child)
+                elif child.is_file() and self.is_video(child):
+                    yield child.resolve()
 
     def artwork_url(self, path: Path) -> Optional[str]:
         artwork = self.find_artwork(path)

@@ -11,6 +11,7 @@ import { Sidebar } from "../components/Sidebar.jsx";
 export default function App() {
   const [health, setHealth] = useState(null);
   const [sources, setSources] = useState([]);
+  const [libraryItems, setLibraryItems] = useState([]);
   const [browseData, setBrowseData] = useState(null);
   const [browseError, setBrowseError] = useState(null);
   const [history, setHistory] = useState([]);
@@ -46,15 +47,17 @@ export default function App() {
 
   async function refreshAll() {
     try {
-      const [healthData, sourceData, historyData, favoriteData, settingData] = await Promise.all([
+      const [healthData, sourceData, libraryData, historyData, favoriteData, settingData] = await Promise.all([
         api.health(),
         api.sources(),
+        api.library(),
         api.history(),
         api.favorites(),
         api.settings()
       ]);
       setHealth(healthData);
       setSources(sourceData);
+      setLibraryItems(libraryData.items || []);
       setHistory(historyData);
       setFavorites(favoriteData);
       setSettings(settingData);
@@ -120,7 +123,7 @@ export default function App() {
 
   async function play(pathOrItem) {
     const path = typeof pathOrItem === "string" ? pathOrItem : pathOrItem.path;
-    if (typeof pathOrItem !== "string" && pathOrItem.media_available === false) {
+    if (typeof pathOrItem !== "string" && (pathOrItem.media_available === false || pathOrItem.available === false)) {
       setError(`${pathOrItem.title || pathOrItem.path}: source is offline.`);
       return;
     }
@@ -129,6 +132,7 @@ export default function App() {
       const state = await api.play(path);
       setPlayerState(state);
       setHistory(await api.history());
+      setLibraryItems((await api.library()).items || []);
     } catch (caught) {
       setError(caught.message);
     }
@@ -153,6 +157,7 @@ export default function App() {
       const isFavorite = favoritePaths.has(item.path);
       await api.setFavorite(item.path, item.title || item.name, !isFavorite);
       setFavorites(await api.favorites());
+      setLibraryItems((await api.library()).items || []);
       if (browseData) {
         setBrowseData({
           ...browseData,
@@ -181,6 +186,16 @@ export default function App() {
     }
   }
 
+  async function scanLibrary() {
+    setError(null);
+    try {
+      await api.scanLibrary();
+      setLibraryItems((await api.library()).items || []);
+    } catch (caught) {
+      setError(caught.message);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -190,6 +205,7 @@ export default function App() {
         onAddFolder={addFolder}
         onOpenSource={openSource}
         onViewChange={setView}
+        onScanLibrary={scanLibrary}
       />
 
       <main className="workspace">
@@ -232,6 +248,16 @@ export default function App() {
           />
         )}
 
+        {view === "index" && (
+          <HistoryList
+            title="Library"
+            items={libraryItems}
+            favoritePaths={favoritePaths}
+            onPlay={play}
+            onToggleFavorite={toggleFavorite}
+          />
+        )}
+
         {view === "favorites" && (
           <HistoryList
             title="Favorites"
@@ -259,6 +285,9 @@ export default function App() {
 function viewTitle(view, browseData) {
   if (view === "history") {
     return "Recent";
+  }
+  if (view === "index") {
+    return "Library";
   }
   if (view === "favorites") {
     return "Favorites";
