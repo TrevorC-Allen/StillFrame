@@ -6,8 +6,11 @@ This folder contains the native SwiftUI client for macOS, iPadOS, and iOS. It is
 
 - The Mac StillFrame desktop app remains the host for SQLite, local folders, metadata cache, and mpv.
 - iPhone and iPad connect to the Mac host over the trusted local network.
+- The native app has Library, Folders, Diagnostics, and Settings tabs.
+- Folders consumes `/sources` and `/browse` to navigate mounted local/NAS paths from iPadOS/iOS.
 - Native preview uses `AVPlayer` through `/media/stream` for formats supported by Apple platforms.
 - Full-quality playback can be launched on the Mac host through `POST /play`.
+- Diagnostics shows playback runtime status and local media cache usage.
 
 ## Run From Xcode
 

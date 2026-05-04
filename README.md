@@ -8,6 +8,7 @@ StillFrame is a local-first media center for Apple devices. The Mac desktop host
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
 - Local library indexing for faster shelves, full-library search, Web/Electron facets, and whole-library views.
 - Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
+- Generated poster cache diagnostics and clearing from the desktop settings page.
 - Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, mpv launch actions, and library filter chips.
 - Local subtitles matched from the media folder.
 - Source availability checks for disconnected NAS paths.
@@ -90,7 +91,7 @@ cd path/to/StillFrame
 ./scripts/run_server_lan.sh
 ```
 
-Then open `clients/apple/StillFrameApple` in Xcode and run the SwiftUI app on iPhone or iPad. Set the app server URL to `http://<mac-lan-ip>:8765`. The native client can browse the indexed library, show generated posters and descriptions, preview Apple-supported formats with AVPlayer, toggle favorites, start scans, refresh metadata, and ask the Mac host to launch full-quality mpv playback.
+Then open `clients/apple/StillFrameApple` in Xcode and run the SwiftUI app on iPhone or iPad. Set the app server URL to `http://<mac-lan-ip>:8765`. The native client can browse the indexed library and source folders, show generated posters and descriptions, preview Apple-supported formats with AVPlayer, toggle favorites, start scans, refresh metadata, inspect cache diagnostics, and ask the Mac host to launch full-quality mpv playback.
 
 ## Web MVP Shortcuts
 
@@ -108,6 +109,8 @@ The local API listens on `http://127.0.0.1:8765`.
 
 - `GET /health`
 - `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg presence, paths, versions, preview support, playback issues, and install hints.
+- `GET /diagnostics/cache`
+- `POST /diagnostics/cache/clear`
 - `GET /sources`
 - `POST /sources`
 - `GET /library` supports search, sort, and facet filters for media type, year, quality, source, favorite, and availability.
@@ -119,6 +122,7 @@ The local API listens on `http://127.0.0.1:8765`.
 - `POST /library/metadata/refresh`
 - `POST /history/clear`
 - `GET /browse?path=...`
+- `GET /media/details?path=...`
 - `POST /play`
 - `GET /player/state`
 - `POST /player/command`

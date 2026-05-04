@@ -37,7 +37,10 @@ It uses:
 - `URLSession` for the StillFrame local API.
 - `AsyncImage` for local poster/artwork URLs.
 - `AVPlayer` for native preview streams.
+- `GET /sources` and `GET /browse` for native folder browsing.
+- `GET /media/details` for single-file poster, overview, progress, and favorite state.
 - `POST /play` to ask the Mac host to launch mpv for full-quality playback.
+- `GET /diagnostics/cache` for media cache status in Diagnostics.
 
 Because iPadOS/iOS cannot run the Electron/Python/mpv host directly, the Mac remains the media server during this stage.
 
