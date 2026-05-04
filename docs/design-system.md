@@ -9,6 +9,7 @@ StillFrame is a quiet desktop tool. The UI favors scanning, repeated use, and pr
 - Fixed sidebar for navigation and sources.
 - Main workspace for browsing and list views.
 - Right player panel for transport, seek, speed, audio, and subtitle controls.
+- Metadata details use a single right-side drawer, not nested cards, so browsing and playback remain visually anchored.
 - Repeated rows use compact 8px-radius surfaces.
 
 ## Color
@@ -30,3 +31,4 @@ StillFrame is a quiet desktop tool. The UI favors scanning, repeated use, and pr
 - Select menus for audio, subtitle, and speed choices.
 - Range input for seek.
 - Compact status chips for runtime availability.
+- Media details actions group browser preview, favorite, and mpv launch with disabled states when media or mpv is unavailable.

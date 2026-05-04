@@ -73,6 +73,7 @@ const state = {
   progressTimer: null,
   health: null,
   seeking: false,
+  detailItem: null,
   subtitleDelay: 0
 };
 
@@ -148,7 +149,19 @@ const els = {
   continueCount: document.querySelector("#continue-count"),
   favoriteShelf: document.querySelector("#favorite-shelf"),
   favoriteItems: document.querySelector("#favorite-items"),
-  favoriteCount: document.querySelector("#favorite-count")
+  favoriteCount: document.querySelector("#favorite-count"),
+  detailScrim: document.querySelector("#media-detail-scrim"),
+  detailDrawer: document.querySelector("#media-detail-drawer"),
+  detailCloseButton: document.querySelector("#detail-close-button"),
+  detailPoster: document.querySelector("#detail-poster"),
+  detailTitle: document.querySelector("#detail-title"),
+  detailMeta: document.querySelector("#detail-meta"),
+  detailOverview: document.querySelector("#detail-overview"),
+  detailPath: document.querySelector("#detail-path"),
+  detailMetadataSource: document.querySelector("#detail-metadata-source"),
+  detailPlayButton: document.querySelector("#detail-play-button"),
+  detailFavoriteButton: document.querySelector("#detail-favorite-button"),
+  detailMpvButton: document.querySelector("#detail-mpv-button")
 };
 
 boot();
@@ -272,6 +285,21 @@ function bindEvents() {
       path: state.currentMedia.path,
       name: state.currentMedia.title
     });
+  });
+  els.detailCloseButton.addEventListener("click", closeMediaDetail);
+  els.detailScrim.addEventListener("click", closeMediaDetail);
+  els.detailPlayButton.addEventListener("click", async () => {
+    if (!state.detailItem) return;
+    await play(state.detailItem);
+    closeMediaDetail();
+  });
+  els.detailFavoriteButton.addEventListener("click", async () => {
+    if (!state.detailItem) return;
+    await toggleFavorite(state.detailItem);
+  });
+  els.detailMpvButton.addEventListener("click", async () => {
+    if (!state.detailItem) return;
+    await openInMpv(state.detailItem);
   });
 
   els.rewindButton.addEventListener("click", () => skipPreview(-10));
@@ -502,7 +530,7 @@ async function openInMpv(item) {
 }
 
 async function toggleFavorite(item) {
-  const title = item.name || item.title || item.path.split("/").at(-1);
+  const title = displayTitle(item);
   const next = !state.favorites.has(item.path);
   await run(async () => {
     await api.setFavorite(item.path, title, next);
@@ -514,6 +542,7 @@ async function toggleFavorite(item) {
     await refreshFavoritesOnly();
     renderShelves();
     renderFavoriteButton();
+    renderMediaDetailActions();
   });
 }
 
@@ -544,6 +573,7 @@ function renderHealth(health) {
     ? `mpv: ${health.mpv_path || "available"}\nffmpeg: ${health.ffmpeg_path || "available"}`
     : health.install_hint || "Install mpv and ffmpeg for full playback.";
   els.controlMpvButton.disabled = !ready || !state.currentMedia;
+  renderMediaDetailActions();
 }
 
 function renderSources() {
@@ -636,10 +666,9 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
   target.innerHTML = "";
 
   for (const item of items) {
-    const button = document.createElement("button");
-    button.className = "poster-card";
-    button.title = item.path;
-    button.addEventListener("click", () => play(item));
+    const card = document.createElement("div");
+    card.className = "poster-card";
+    card.title = item.path;
 
     const art = document.createElement("div");
     art.className = "poster-art";
@@ -647,7 +676,16 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
       art.style.backgroundImage = `linear-gradient(transparent, rgba(0, 0, 0, 0.45)), url("${item.artwork_url}")`;
       art.textContent = "";
     } else {
-      art.innerHTML = icon("film", "poster-icon");
+      art.classList.add("missing-artwork");
+    }
+
+    const detailButton = document.createElement("button");
+    detailButton.className = "poster-art-button";
+    detailButton.type = "button";
+    detailButton.setAttribute("aria-label", `Details for ${displayTitle(item)}`);
+    detailButton.addEventListener("click", () => showMediaDetail(item));
+    if (!item.artwork_url) {
+      detailButton.innerHTML = icon("film", "poster-icon");
     }
 
     const progress = progressRatio(item);
@@ -658,6 +696,21 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
       art.append(progressBar);
     }
 
+    const playButton = document.createElement("button");
+    playButton.className = "poster-play-button";
+    playButton.type = "button";
+    playButton.disabled = !isMediaAvailable(item);
+    playButton.title = isMediaAvailable(item) ? `${actionLabel} ${displayTitle(item)}` : "Media is offline";
+    playButton.setAttribute("aria-label", `${actionLabel} ${displayTitle(item)}`);
+    playButton.innerHTML = icon("play");
+    playButton.addEventListener("click", () => play(item));
+    art.append(detailButton, playButton);
+
+    const copyButton = document.createElement("button");
+    copyButton.className = "poster-copy";
+    copyButton.type = "button";
+    copyButton.addEventListener("click", () => showMediaDetail(item));
+
     const title = document.createElement("span");
     title.className = "poster-title";
     title.textContent = displayTitle(item);
@@ -666,8 +719,9 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
     subtitle.className = "poster-subtitle";
     subtitle.textContent = `${actionLabel}${progress > 0 ? ` · ${Math.round(progress * 100)}%` : ""}`;
 
-    button.append(art, title, subtitle);
-    target.append(button);
+    copyButton.append(title, subtitle);
+    card.append(art, copyButton);
+    target.append(card);
   }
 }
 
@@ -807,10 +861,11 @@ function renderIndexedLibrary() {
   for (const item of state.libraryRows) {
     const online = item.available !== false;
     const row = document.createElement("div");
-    row.className = online ? "file-row" : "file-row offline";
+    row.className = online ? "file-row library-row" : "file-row library-row offline";
 
     const main = document.createElement("button");
     main.className = "row-main";
+    main.title = "Show details";
     main.innerHTML = `
       <span class="icon">${icon("film")}</span>
       <span class="row-title">
@@ -819,11 +874,18 @@ function renderIndexedLibrary() {
         ${item.overview ? `<small class="overview-line">${escapeHtml(item.overview)}</small>` : ""}
       </span>
     `;
-    main.addEventListener("click", () => play(item));
+    main.addEventListener("click", () => showMediaDetail(item));
 
     const quality = document.createElement("span");
     quality.className = "quality-chip";
     quality.textContent = online ? item.quality || "Video" : "Offline";
+
+    const playAction = document.createElement("button");
+    playAction.className = "icon-action play-action";
+    playAction.innerHTML = `${icon("play")}<span>Play</span>`;
+    playAction.disabled = !online;
+    playAction.title = online ? "Play browser preview" : "Media is offline";
+    playAction.addEventListener("click", () => play(item));
 
     const mpvAction = document.createElement("button");
     mpvAction.className = "icon-action";
@@ -838,9 +900,89 @@ function renderIndexedLibrary() {
     favoriteAction.disabled = !online;
     favoriteAction.addEventListener("click", () => toggleFavorite(item));
 
-    row.append(main, quality, mpvAction, favoriteAction);
+    row.append(main, quality, playAction, mpvAction, favoriteAction);
     els.items.append(row);
   }
+}
+
+function showMediaDetail(item) {
+  if (!item || item.kind === "directory") {
+    return;
+  }
+  state.detailItem = { ...item };
+  renderMediaDetail();
+  els.detailScrim.hidden = false;
+  els.detailDrawer.hidden = false;
+  els.detailDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("detail-open");
+  window.requestAnimationFrame(() => {
+    els.detailCloseButton.focus({ preventScroll: true });
+  });
+}
+
+function closeMediaDetail() {
+  state.detailItem = null;
+  els.detailScrim.hidden = true;
+  els.detailDrawer.hidden = true;
+  els.detailDrawer.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("detail-open");
+}
+
+function renderMediaDetail() {
+  const item = state.detailItem;
+  if (!item) {
+    return;
+  }
+
+  const title = displayTitle(item);
+  els.detailTitle.textContent = title;
+  els.detailPoster.className = item.artwork_url ? "detail-poster" : "detail-poster missing-artwork";
+  els.detailPoster.style.backgroundImage = item.artwork_url
+    ? `linear-gradient(transparent, rgba(0, 0, 0, 0.55)), url("${item.artwork_url}")`
+    : "";
+  els.detailPoster.innerHTML = item.artwork_url ? "" : `${icon("film", "poster-icon")}<span>No artwork</span>`;
+
+  els.detailMeta.innerHTML = "";
+  const meta = mediaMetaParts(item);
+  for (const label of meta.length ? meta : ["Video file"]) {
+    const chip = document.createElement("span");
+    chip.className = "detail-chip";
+    chip.textContent = label;
+    els.detailMeta.append(chip);
+  }
+
+  els.detailOverview.textContent = item.overview || "No overview has been generated yet.";
+  els.detailPath.textContent = item.path || "";
+  els.detailPath.title = item.path || "";
+  els.detailMetadataSource.textContent = metadataSourceLabel(item.metadata_source);
+  renderMediaDetailActions();
+}
+
+function renderMediaDetailActions() {
+  if (!els.detailPlayButton || !els.detailFavoriteButton || !els.detailMpvButton) {
+    return;
+  }
+
+  const item = state.detailItem;
+  const online = isMediaAvailable(item);
+  els.detailPlayButton.disabled = !online;
+  els.detailPlayButton.title = online ? "Play browser preview" : "Media is offline";
+  els.detailFavoriteButton.disabled = !online;
+  els.detailMpvButton.disabled = !online || !state.health?.mpv_available;
+  els.detailMpvButton.title = state.health?.mpv_available ? "Open in mpv" : "mpv is not installed";
+  renderDetailFavoriteButton();
+}
+
+function renderDetailFavoriteButton() {
+  if (!state.detailItem) {
+    els.detailFavoriteButton.className = "icon-action detail-action";
+    els.detailFavoriteButton.innerHTML = `${icon("star")}<span>Favorite</span>`;
+    return;
+  }
+
+  const favorite = state.favorites.has(state.detailItem.path);
+  els.detailFavoriteButton.className = favorite ? "icon-action detail-action starred" : "icon-action detail-action";
+  els.detailFavoriteButton.innerHTML = `${icon("star")}<span>${favorite ? "Starred" : "Favorite"}</span>`;
 }
 
 function sortedBrowserItems(items) {
@@ -1059,7 +1201,39 @@ function subtitleLanguageCode(subtitle) {
 }
 
 function displayTitle(item) {
-  return item.display_title || item.title || item.name || item.path.split("/").at(-1);
+  return item.display_title || item.title || item.name || item.path?.split("/").at(-1) || "Untitled";
+}
+
+function mediaMetaParts(item) {
+  const parts = [];
+  const mediaType = mediaTypeLabel(item.media_type);
+  if (mediaType) parts.push(mediaType);
+  if (item.year) parts.push(String(item.year));
+  const episode = episodeLabel(item);
+  if (episode) parts.push(episode);
+  if (item.quality) parts.push(String(item.quality));
+  return parts;
+}
+
+function mediaTypeLabel(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "movie") return "Movie";
+  if (normalized === "tv" || normalized === "series" || normalized === "episode") return "TV";
+  return "";
+}
+
+function episodeLabel(item) {
+  if (item.season == null || item.episode == null) {
+    return "";
+  }
+  return `S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`;
+}
+
+function metadataSourceLabel(source) {
+  const normalized = String(source || "").toLowerCase();
+  if (normalized === "tmdb") return "TMDb";
+  if (normalized === "local") return "Local filename";
+  return "Not indexed";
 }
 
 function rowSubtitle(item) {
@@ -1068,9 +1242,8 @@ function rowSubtitle(item) {
   }
   const parts = [];
   if (item.year) parts.push(item.year);
-  if (item.season && item.episode) {
-    parts.push(`S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`);
-  }
+  const episode = episodeLabel(item);
+  if (episode) parts.push(episode);
   if (item.progress) parts.push(`${Math.round(item.progress * 100)}% watched`);
   return parts.join(" · ") || item.name || "";
 }
@@ -1078,9 +1251,8 @@ function rowSubtitle(item) {
 function librarySubtitle(item) {
   const parts = [];
   if (item.year) parts.push(item.year);
-  if (item.season && item.episode) {
-    parts.push(`S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`);
-  }
+  const episode = episodeLabel(item);
+  if (episode) parts.push(episode);
   if (item.position && item.duration) {
     parts.push(`${Math.round((item.position / item.duration) * 100)}% watched`);
   }
@@ -1101,6 +1273,10 @@ function progressRatio(item) {
     return Math.min((item.position || 0) / item.duration, 1);
   }
   return item.progress || 0;
+}
+
+function isMediaAvailable(item) {
+  return Boolean(item) && item.media_available !== false && item.available !== false;
 }
 
 function startProgressTimer() {
@@ -1139,6 +1315,14 @@ function handleKeyboardShortcut(event) {
     return;
   }
   const key = event.key.toLowerCase();
+  if (key === "escape" && state.detailItem) {
+    event.preventDefault();
+    closeMediaDetail();
+    return;
+  }
+  if (state.detailItem && els.detailDrawer.contains(target)) {
+    return;
+  }
   const handledKeys = [" ", "k", "arrowleft", "arrowright", "arrowup", "arrowdown", "m", "f", "s", "[", "]"];
   if (!handledKeys.includes(key)) {
     return;

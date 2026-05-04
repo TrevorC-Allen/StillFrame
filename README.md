@@ -8,6 +8,7 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
 - Local library indexing for faster shelves, full-library search, and whole-library views.
 - Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
+- Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, and mpv launch actions.
 - Local subtitles matched from the media folder.
 - Source availability checks for disconnected NAS paths.
 - Browser preview resumes unfinished videos from saved progress.

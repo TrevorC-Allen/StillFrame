@@ -32,6 +32,15 @@ def test_web_mvp_home_and_health() -> None:
     assert "library-shelf" in home.text
     assert "library-filter" in home.text
     assert "library-sort" in home.text
+    assert "media-detail-drawer" in home.text
+    assert "detail-poster" in home.text
+    assert "detail-overview" in home.text
+    assert "detail-path" in home.text
+    assert "detail-metadata-source" in home.text
+    assert "detail-play-button" in home.text
+    assert "detail-favorite-button" in home.text
+    assert "detail-mpv-button" in home.text
+    assert "detail-close-button" in home.text
     assert "folder-view-button" in home.text
     assert "library-view-button" in home.text
     assert "browser-filter" in home.text
