@@ -1,18 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require("electron");
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const APP_ROOT = app.isPackaged ? app.getAppPath() : path.resolve(__dirname, "../..");
 const PROJECT_ROOT = app.isPackaged ? path.join(process.resourcesPath, "StillFrame") : path.resolve(APP_ROOT, "..");
 const SERVER_DIR = path.join(PROJECT_ROOT, "server");
 const SERVER_URL = "http://127.0.0.1:8765";
+const NATIVE_TOOL_PATHS = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 
 let mainWindow = null;
 let serverProcess = null;
+let backendStdoutFd = null;
+let backendStderrFd = null;
 
 function createMenu() {
   const template = [
@@ -64,6 +64,34 @@ function packagedStorageEnv() {
   };
 }
 
+function writeAppLog(message) {
+  if (!app.isPackaged) {
+    console.log(message);
+    return;
+  }
+
+  const logDir = path.join(app.getPath("userData"), "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  fs.appendFileSync(path.join(logDir, "main.log"), `${new Date().toISOString()} ${message}\n`);
+}
+
+function backendStdio() {
+  if (process.env.NODE_ENV === "development") {
+    return "inherit";
+  }
+
+  if (!app.isPackaged) {
+    return "ignore";
+  }
+
+  const logDir = path.join(app.getPath("userData"), "logs");
+  fs.mkdirSync(logDir, { recursive: true });
+  const backendLogPath = path.join(logDir, "backend.log");
+  backendStdoutFd = fs.openSync(backendLogPath, "a");
+  backendStderrFd = fs.openSync(backendLogPath, "a");
+  return ["ignore", backendStdoutFd, backendStderrFd];
+}
+
 function startBackend() {
   if (serverProcess) {
     return;
@@ -71,6 +99,7 @@ function startBackend() {
 
   const env = {
     ...process.env,
+    PATH: [...NATIVE_TOOL_PATHS, process.env.PATH].filter(Boolean).join(path.delimiter),
     PYTHONPATH: [PROJECT_ROOT, SERVER_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
     ...packagedStorageEnv(),
     STILLFRAME_HOST: "127.0.0.1",
@@ -85,11 +114,23 @@ function startBackend() {
     {
       cwd: SERVER_DIR,
       env,
-      stdio: process.env.NODE_ENV === "development" ? "inherit" : "ignore"
+      stdio: backendStdio()
     }
   );
 
+  serverProcess.on("error", (error) => {
+    writeAppLog(`backend spawn error: ${error.stack || error.message}`);
+  });
+
   serverProcess.on("exit", () => {
+    if (backendStdoutFd !== null) {
+      fs.closeSync(backendStdoutFd);
+      backendStdoutFd = null;
+    }
+    if (backendStderrFd !== null) {
+      fs.closeSync(backendStderrFd);
+      backendStderrFd = null;
+    }
     serverProcess = null;
   });
 }
@@ -120,7 +161,7 @@ async function waitForBackend(deadlineMs = 8000) {
 
 async function createWindow() {
   startBackend();
-  await waitForBackend();
+  const backendReady = await waitForBackend();
 
   mainWindow = new BrowserWindow({
     width: 1320,
@@ -142,17 +183,29 @@ async function createWindow() {
   } else {
     await mainWindow.loadFile(path.join(APP_ROOT, "dist", "index.html"));
   }
+
+  if (!backendReady) {
+    mainWindow.webContents.send("backend:unavailable");
+  }
 }
 
-app.whenReady().then(() => {
+async function boot() {
   createMenu();
-  createWindow();
+  await createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      createWindow().catch((error) => {
+        writeAppLog(`activate createWindow error: ${error.stack || error.message}`);
+      });
     }
   });
+}
+
+app.whenReady().then(boot).catch((error) => {
+  writeAppLog(`boot error: ${error.stack || error.message}`);
+  dialog.showErrorBox("StillFrame failed to start", error.message);
+  app.quit();
 });
 
 app.on("window-all-closed", () => {

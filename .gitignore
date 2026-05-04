@@ -12,8 +12,10 @@ dist/
 build/
 .build/
 release/
+release-local/
 DerivedData/
 clients/apple/StillFrameApple/StillFrameApple.xcodeproj/
+clients/apple/StillFrameApple/StillFrameApple 2.xcodeproj/
 coverage/
 logs/*.log
 server/stillframe.db

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first Electron media center powered by FastAPI and mpv.",
-  "main": "src/main/main.js",
+  "main": "src/main/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && NODE_ENV=development electron .\"",
@@ -11,20 +11,20 @@
     "build": "vite build",
     "start": "NODE_ENV=production electron .",
     "pack:mac": "npm run build && electron-builder --mac --dir",
-    "dist:mac": "npm run build && electron-builder --mac"
+    "dist:mac": "npm run build && electron-builder --mac",
+    "install:mac:local": "../scripts/install_macos_app.sh"
   },
-  "dependencies": {
+  "dependencies": {},
+  "devDependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^8.2.2",
+    "electron": "^41.5.0",
+    "electron-builder": "^26.0.12",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^8.0.10",
     "wait-on": "^7.2.0"
-  },
-  "devDependencies": {
-    "electron": "^41.5.0",
-    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "app.stillframe.desktop",
@@ -36,6 +36,7 @@
     "mac": {
       "category": "public.app-category.video",
       "icon": "assets/icons/stillframe.icns",
+      "identity": null,
       "target": [
         "dmg",
         "zip"
@@ -53,7 +54,6 @@
         "to": "StillFrame/server",
         "filter": [
           "**/*",
-          "!**/.venv/**",
           "!**/__pycache__/**",
           "!**/*.pyc",
           "!stillframe.db"
