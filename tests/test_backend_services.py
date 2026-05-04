@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -256,6 +257,32 @@ def test_scan_sources_indexes_cleaned_local_metadata(tmp_path: Path, monkeypatch
     assert "电影《春光乍泄》" in item["overview"]
     assert "BD1080p" not in item["overview"]
     assert "中文字幕" not in item["overview"]
+
+
+def test_generated_poster_prefers_ffmpeg_frame_when_available(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    disable_tmdb(monkeypatch)
+    _, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    movie = tmp_path / "Frame.Movie.2026.4K.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess:
+        assert "scale=600:900:force_original_aspect_ratio=increase,crop=600:900,setsar=1" in command
+        Path(command[-1]).write_bytes(b"jpeg frame")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(metadata_module.shutil, "which", lambda name: "/usr/bin/ffmpeg" if name == "ffmpeg" else None)
+    monkeypatch.setattr(metadata_module.subprocess, "run", fake_run)
+
+    metadata = media.metadata.enrich(movie, media.describe_media(movie))
+
+    poster_path = Path(metadata["poster_path"])
+    assert poster_path.suffix == ".jpg"
+    assert poster_path.read_bytes() == b"jpeg frame"
+    assert metadata["artwork_url"] == f"/media/artwork?path={poster_path}"
 
 
 def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:

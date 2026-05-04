@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import hashlib
 import html
 import re
+import shutil
+import subprocess
 import textwrap
 from pathlib import Path
 from typing import Any, Optional
@@ -487,6 +489,12 @@ class MetadataService:
             if value
         )
         digest = hashlib.sha1(poster_key.encode("utf-8")).hexdigest()
+        frame_poster = self.poster_dir / f"{digest}.jpg"
+        if frame_poster.exists():
+            return frame_poster
+        if self._generate_frame_poster(media_path, frame_poster):
+            return frame_poster
+
         poster = self.poster_dir / f"{digest}.svg"
         if poster.exists():
             return poster
@@ -523,6 +531,49 @@ class MetadataService:
 '''
         poster.write_text(svg, encoding="utf-8")
         return poster
+
+    def _generate_frame_poster(self, media_path: Path, target: Path) -> bool:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            return False
+
+        commands = [
+            self._ffmpeg_frame_command(ffmpeg, media_path, target, "00:00:10"),
+            self._ffmpeg_frame_command(ffmpeg, media_path, target, "00:00:02"),
+        ]
+        for command in commands:
+            try:
+                result = subprocess.run(command, capture_output=True, timeout=20, check=False)
+            except (OSError, subprocess.SubprocessError):
+                continue
+            if result.returncode == 0 and target.exists() and target.stat().st_size > 0:
+                return True
+
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+    def _ffmpeg_frame_command(self, ffmpeg: str, media_path: Path, target: Path, timestamp: str) -> list[str]:
+        return [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            timestamp,
+            "-i",
+            str(media_path),
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=600:900:force_original_aspect_ratio=increase,crop=600:900,setsar=1",
+            "-q:v",
+            "3",
+            "-y",
+            str(target),
+        ]
 
     def _poster_path_from_artwork_url(self, artwork_url: Optional[str]) -> Optional[Path]:
         if not artwork_url:
