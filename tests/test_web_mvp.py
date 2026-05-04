@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app import state as app_state
+from app.services import metadata_service as metadata_module
 
 
 def test_web_mvp_home_and_health() -> None:
@@ -186,6 +187,65 @@ def test_library_scan_job_endpoints(tmp_path: Path) -> None:
     assert jobs_response.json()["items"][0]["id"] == job_id
     assert library_response.status_code == 200
     assert library_response.json()["items"][0]["name"] == "Job.Sample.2026.1080p.mp4"
+
+
+def test_library_metadata_refresh_endpoint(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(metadata_module, "TMDB_API_KEY", None)
+    monkeypatch.setattr(metadata_module, "TMDB_BEARER_TOKEN", None)
+    monkeypatch.setattr(app_state.media_service.metadata, "poster_dir", tmp_path / "posters")
+    app_state.database.path = tmp_path / "metadata-refresh.db"
+    app_state.initialize()
+    media = tmp_path / "Api.Sample.2026.1080p.mp4"
+    media.write_bytes(b"0123456789" * 1024)
+
+    with TestClient(app) as client:
+        source_response = client.post("/sources", json={"path": str(tmp_path)})
+        source = source_response.json()
+        stat = media.stat()
+        app_state.library_service.upsert_media_items(
+            [
+                {
+                    "path": str(media.resolve()),
+                    "source_id": source["id"],
+                    "source_path": source["path"],
+                    "name": media.name,
+                    "title": "Old API Title",
+                    "display_title": "Old API Title",
+                    "year": None,
+                    "season": None,
+                    "episode": None,
+                    "quality": None,
+                    "size": stat.st_size,
+                    "modified_at": stat.st_mtime,
+                    "artwork_url": None,
+                    "overview": "old overview",
+                    "poster_path": None,
+                    "backdrop_url": None,
+                    "tmdb_id": None,
+                    "media_type": None,
+                    "metadata_source": "stale",
+                    "metadata_updated_at": "2025-01-01T00:00:00+00:00",
+                    "available": 1,
+                    "last_seen_at": "2025-01-01T00:00:00+00:00",
+                }
+            ]
+        )
+        refresh_response = client.post(
+            "/library/metadata/refresh",
+            json={"paths": [str(media)]},
+        )
+        library_response = client.get("/library", params={"search": "Api Sample"})
+
+    assert source_response.status_code == 200
+    assert refresh_response.status_code == 200
+    assert refresh_response.json()["items_refreshed"] == 1
+    assert refresh_response.json()["items_missing"] == 0
+    assert refresh_response.json()["items_skipped"] == 0
+    assert refresh_response.json()["errors"] == []
+    assert library_response.status_code == 200
+    assert library_response.json()["items"][0]["title"] == "Api Sample"
+    assert library_response.json()["items"][0]["overview"]
+    assert library_response.json()["items"][0]["metadata_source"] == "local"
 
 
 def test_native_folder_picker_endpoint(monkeypatch) -> None:
