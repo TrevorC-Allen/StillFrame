@@ -76,6 +76,13 @@ cd path/to/StillFrame
 ./scripts/package_macos.sh
 ```
 
+Regenerate app icons:
+
+```bash
+cd path/to/StillFrame
+./scripts/generate_icons.sh
+```
+
 Native iPadOS/iOS client:
 
 ```bash

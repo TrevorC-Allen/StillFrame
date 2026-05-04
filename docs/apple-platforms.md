@@ -19,6 +19,14 @@ Packaging:
 
 The packaged app includes the React UI plus the Python backend and player control layer as Electron extra resources. Runtime SQLite and media cache files are placed under Electron's `userData` directory instead of being written into the app bundle.
 
+App icon assets are generated from `app/assets/icons/stillframe-icon.svg`:
+
+```bash
+./scripts/generate_icons.sh
+```
+
+The script writes Electron PNG/ICNS assets, updates the web favicon, and rebuilds the native Apple `AppIcon.appiconset` without alpha channels.
+
 ## iPadOS and iOS Native Client
 
 The iPad/iPhone client lives in `clients/apple/StillFrameApple`. It is a SwiftUI app, not a browser shell.

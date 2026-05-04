@@ -16,10 +16,12 @@ targets:
     sources:
       - Sources/StillFrameKit
       - Sources/StillFrameApple
+      - Resources/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.ios
         PRODUCT_NAME: StillFrame
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad:
@@ -36,9 +38,11 @@ targets:
     sources:
       - Sources/StillFrameKit
       - Sources/StillFrameApple
+      - Resources/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.macos.native
         PRODUCT_NAME: StillFrame
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_NSPrincipalClass: NSApplication

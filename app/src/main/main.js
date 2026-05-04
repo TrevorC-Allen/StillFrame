@@ -128,6 +128,7 @@ async function createWindow() {
     minWidth: 980,
     minHeight: 680,
     backgroundColor: "#0f1115",
+    icon: path.join(APP_ROOT, "assets", "icons", "stillframe-icon-1024.png"),
     titleBarStyle: "hiddenInset",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),

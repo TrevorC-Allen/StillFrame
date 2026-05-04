@@ -35,12 +35,14 @@
     },
     "mac": {
       "category": "public.app-category.video",
+      "icon": "assets/icons/stillframe.icns",
       "target": [
         "dmg",
         "zip"
       ]
     },
     "files": [
+      "assets/icons/**/*",
       "dist/**/*",
       "src/main/**/*",
       "package.json"

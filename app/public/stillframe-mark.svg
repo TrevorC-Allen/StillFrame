@@ -1,15 +1,75 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="StillFrame">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="StillFrame app icon">
   <defs>
-    <linearGradient id="mark-fill" x1="12" y1="10" x2="86" y2="88" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#D9BB78"/>
-      <stop offset="0.55" stop-color="#CDA85A"/>
-      <stop offset="1" stop-color="#8FD0A9"/>
+    <linearGradient id="bg" x1="108" y1="76" x2="916" y2="958" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1D2633"/>
+      <stop offset="0.38" stop-color="#0B1018"/>
+      <stop offset="1" stop-color="#06080D"/>
     </linearGradient>
+    <radialGradient id="cyanGlow" cx="68%" cy="31%" r="56%" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#68F4D4" stop-opacity="0.8"/>
+      <stop offset="0.42" stop-color="#48A7FF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#48A7FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="goldGlow" cx="24%" cy="78%" r="54%" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F6C15E" stop-opacity="0.74"/>
+      <stop offset="0.48" stop-color="#D87948" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#D87948" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="112" y1="84" x2="914" y2="930" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4D684"/>
+      <stop offset="0.48" stop-color="#66E8D2"/>
+      <stop offset="1" stop-color="#4F80FF"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="214" y1="242" x2="800" y2="776" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#283543"/>
+      <stop offset="0.48" stop-color="#121924"/>
+      <stop offset="1" stop-color="#080C13"/>
+    </linearGradient>
+    <linearGradient id="play" x1="386" y1="350" x2="700" y2="678" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7D476"/>
+      <stop offset="0.52" stop-color="#75F0D6"/>
+      <stop offset="1" stop-color="#55A5FF"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="32" stdDeviation="34" flood-color="#000000" flood-opacity="0.46"/>
+    </filter>
+    <filter id="innerGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#6EF3D4" flood-opacity="0.34"/>
+    </filter>
   </defs>
-  <rect x="8" y="8" width="80" height="80" rx="20" fill="#11110F"/>
-  <rect x="12" y="12" width="72" height="72" rx="17" fill="url(#mark-fill)"/>
-  <path d="M24 27.5C24 23.9 26.9 21 30.5 21h35C69.1 21 72 23.9 72 27.5v41C72 72.1 69.1 75 65.5 75h-35C26.9 75 24 72.1 24 68.5v-41Z" fill="#11110F"/>
-  <path d="M34 31h6v7h-6v-7Zm22 0h6v7h-6v-7ZM34 58h6v7h-6v-7Zm22 0h6v7h-6v-7Z" fill="#D9BB78"/>
-  <path d="M44 38.5c0-2.2 2.4-3.6 4.3-2.4l14.6 9.1c1.8 1.1 1.8 3.7 0 4.8l-14.6 9.1C46.4 60.3 44 59 44 56.7V38.5Z" fill="#8FD0A9"/>
-</svg>
 
+  <rect width="1024" height="1024" fill="#070A10"/>
+  <rect x="54" y="54" width="916" height="916" rx="230" fill="url(#bg)"/>
+  <rect x="54" y="54" width="916" height="916" rx="230" fill="url(#cyanGlow)"/>
+  <rect x="54" y="54" width="916" height="916" rx="230" fill="url(#goldGlow)"/>
+  <rect x="76" y="76" width="872" height="872" rx="210" fill="none" stroke="url(#rim)" stroke-width="18" opacity="0.92"/>
+  <rect x="111" y="111" width="802" height="802" rx="178" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.16"/>
+
+  <g filter="url(#softShadow)">
+    <path d="M208 331c0-52 42-94 94-94h420c52 0 94 42 94 94v362c0 52-42 94-94 94H302c-52 0-94-42-94-94V331Z" fill="url(#glass)"/>
+    <path d="M240 357c0-42 34-76 76-76h392c42 0 76 34 76 76v310c0 42-34 76-76 76H316c-42 0-76-34-76-76V357Z" fill="#090E16" opacity="0.78"/>
+    <path d="M278 380c0-29 23-52 52-52h364c29 0 52 23 52 52v264c0 29-23 52-52 52H330c-29 0-52-23-52-52V380Z" fill="#101824"/>
+    <path d="M306 412c0-27 22-49 49-49h314c27 0 49 22 49 49v200c0 27-22 49-49 49H355c-27 0-49-22-49-49V412Z" fill="#060A11"/>
+    <path d="M326 394h372v236H326V394Z" fill="#0F1724"/>
+    <path d="M326 394h372v236H326V394Z" fill="url(#cyanGlow)" opacity="0.42"/>
+  </g>
+
+  <g opacity="0.82">
+    <rect x="252" y="343" width="40" height="56" rx="11" fill="#E9C36B"/>
+    <rect x="252" y="452" width="40" height="56" rx="11" fill="#E9C36B" opacity="0.56"/>
+    <rect x="252" y="561" width="40" height="56" rx="11" fill="#E9C36B" opacity="0.8"/>
+    <rect x="732" y="343" width="40" height="56" rx="11" fill="#62E7D2"/>
+    <rect x="732" y="452" width="40" height="56" rx="11" fill="#62E7D2" opacity="0.6"/>
+    <rect x="732" y="561" width="40" height="56" rx="11" fill="#62E7D2" opacity="0.82"/>
+  </g>
+
+  <g filter="url(#innerGlow)">
+    <path d="M436 377c-23-14-52 3-52 30v210c0 27 29 44 52 30l171-105c22-14 22-47 0-60L436 377Z" fill="url(#play)"/>
+    <path d="M445 437c-9-6-21 1-21 12v126c0 11 12 18 21 12l103-63c9-6 9-18 0-24L445 437Z" fill="#071019" opacity="0.58"/>
+  </g>
+
+  <path d="M226 716c151-192 347-330 586-412" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" opacity="0.1"/>
+  <path d="M192 250c226-69 435-59 641 31" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" opacity="0.12"/>
+  <circle cx="736" cy="274" r="15" fill="#FFFFFF" opacity="0.66"/>
+  <circle cx="779" cy="298" r="7" fill="#FFFFFF" opacity="0.38"/>
+</svg>
