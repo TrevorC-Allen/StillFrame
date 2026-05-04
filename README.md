@@ -6,7 +6,7 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 
 - Local folders and Finder-mounted NAS paths.
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
-- Local library indexing for faster shelves, full-library search, whole-library views, and Web MVP library facets for media type, favorites, offline items, year, quality, and source.
+- Local library indexing for faster shelves, full-library search, Web/Electron facets, and whole-library views.
 - Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
 - Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, mpv launch actions, and library filter chips.
 - Local subtitles matched from the media folder.
@@ -65,7 +65,7 @@ npm install
 npm run dev
 ```
 
-The Electron shell includes an indexed Library view with background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
+The Electron shell includes an indexed Library view with segmented media filters, year/quality/source facets, background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
 
 ## Web MVP Shortcuts
 
@@ -86,7 +86,7 @@ The local API listens on `http://127.0.0.1:8765`.
 - `GET /sources`
 - `POST /sources`
 - `GET /library` supports search, sort, and facet filters for media type, year, quality, source, favorite, and availability.
-- `GET /library/facets` returns library totals plus media type, year, quality, source, favorite, and offline counts; the Web MVP can fall back to local counts from loaded rows if needed.
+- `GET /library/facets` returns library totals plus media type, year, quality, source, favorite, and offline counts; the UIs can fall back to local counts from loaded rows if needed.
 - `POST /library/scan` starts a background scan job by default.
 - `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
 - `GET /library/scan/jobs`

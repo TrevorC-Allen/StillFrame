@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { api } from "../api/client.js";
@@ -9,10 +9,22 @@ import { PlayerPanel } from "../components/PlayerPanel.jsx";
 import { SettingsPage } from "../pages/SettingsPage.jsx";
 import { Sidebar } from "../components/Sidebar.jsx";
 
+const DEFAULT_LIBRARY_QUERY = Object.freeze({
+  search: "",
+  sort: "recent",
+  segment: "all",
+  year: "all",
+  quality: "all",
+  sourceId: "all"
+});
+
 export default function App() {
   const [health, setHealth] = useState(null);
   const [sources, setSources] = useState([]);
   const [libraryItems, setLibraryItems] = useState([]);
+  const [libraryFacets, setLibraryFacets] = useState(null);
+  const [libraryQuery, setLibraryQuery] = useState(DEFAULT_LIBRARY_QUERY);
+  const [libraryLoading, setLibraryLoading] = useState(false);
   const [browseData, setBrowseData] = useState(null);
   const [browseError, setBrowseError] = useState(null);
   const [history, setHistory] = useState([]);
@@ -27,6 +39,8 @@ export default function App() {
   const [metadataRefresh, setMetadataRefresh] = useState(null);
   const [metadataRefreshing, setMetadataRefreshing] = useState(false);
   const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
+  const libraryQueryRef = useRef(DEFAULT_LIBRARY_QUERY);
+  const didLoadInitialLibrary = useRef(false);
 
   const favoritePaths = useMemo(
     () => new Set(favorites.map((favorite) => favorite.path)),
@@ -35,10 +49,49 @@ export default function App() {
   const scanning = scanStarting || scanJob?.status === "running";
 
   useEffect(() => {
+    libraryQueryRef.current = libraryQuery;
+  }, [libraryQuery]);
+
+  useEffect(() => {
     refreshAll();
     const unsubscribe = window.stillframe?.onAddFolder?.(() => addFolder());
     return () => unsubscribe?.();
   }, []);
+
+  useEffect(() => {
+    if (!didLoadInitialLibrary.current) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setLibraryLoading(true);
+      setError(null);
+      try {
+        const mediaData = await loadMediaCollections(libraryQuery);
+        if (cancelled) {
+          return;
+        }
+        setLibraryItems(mediaData.libraryItems);
+        setLibraryFacets(mediaData.libraryFacets);
+        setHistory(mediaData.history);
+        setFavorites(mediaData.favorites);
+      } catch (caught) {
+        if (!cancelled) {
+          setError(caught.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLibraryLoading(false);
+        }
+      }
+    }, libraryQuery.search.trim() ? 180 : 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [libraryQuery]);
 
   useEffect(() => {
     const timer = setInterval(async () => {
@@ -70,13 +123,14 @@ export default function App() {
         if (isFinalScanStatus(latest.status)) {
           const [sourceData, mediaData] = await Promise.all([
             api.sources(),
-            loadMediaCollections()
+            loadMediaCollections(libraryQueryRef.current)
           ]);
           if (cancelled) {
             return;
           }
           setSources(sourceData);
           setLibraryItems(mediaData.libraryItems);
+          setLibraryFacets(mediaData.libraryFacets);
           setHistory(mediaData.history);
           setFavorites(mediaData.favorites);
           setScanJob(latest);
@@ -106,20 +160,19 @@ export default function App() {
 
   async function refreshAll() {
     try {
-      const [healthData, sourceData, libraryData, historyData, favoriteData, settingData, scanJobsData] = await Promise.all([
+      const [healthData, sourceData, mediaData, settingData, scanJobsData] = await Promise.all([
         api.playbackDiagnostics(),
         api.sources(),
-        api.library(),
-        api.history(),
-        api.favorites(),
+        loadMediaCollections(libraryQueryRef.current),
         api.settings(),
         api.scanJobs({ limit: 1 })
       ]);
       setHealth(healthData);
       setSources(sourceData);
-      setLibraryItems(libraryData.items || []);
-      setHistory(historyData);
-      setFavorites(favoriteData);
+      setLibraryItems(mediaData.libraryItems);
+      setLibraryFacets(mediaData.libraryFacets);
+      setHistory(mediaData.history);
+      setFavorites(mediaData.favorites);
       setSettings(settingData);
       setScanJob(scanJobsData.items?.[0] || null);
       if (!browseData && !browseError && sourceData.length > 0) {
@@ -135,14 +188,25 @@ export default function App() {
       }
     } catch (caught) {
       setError(caught.message);
+    } finally {
+      didLoadInitialLibrary.current = true;
     }
   }
 
   const refreshMediaCollections = useCallback(async () => {
-    const mediaData = await loadMediaCollections();
+    const mediaData = await loadMediaCollections(libraryQueryRef.current);
     setLibraryItems(mediaData.libraryItems);
+    setLibraryFacets(mediaData.libraryFacets);
     setHistory(mediaData.history);
     setFavorites(mediaData.favorites);
+  }, []);
+
+  const updateLibraryQuery = useCallback((patch) => {
+    setLibraryQuery((current) => {
+      const nextQuery = normalizeLibraryQuery({ ...current, ...patch });
+      libraryQueryRef.current = nextQuery;
+      return nextQuery;
+    });
   }, []);
 
   async function addFolder() {
@@ -265,10 +329,11 @@ export default function App() {
         if (isFinalScanStatus(result.status)) {
           const [sourceData, mediaData] = await Promise.all([
             api.sources(),
-            loadMediaCollections()
+            loadMediaCollections(libraryQueryRef.current)
           ]);
           setSources(sourceData);
           setLibraryItems(mediaData.libraryItems);
+          setLibraryFacets(mediaData.libraryFacets);
           setHistory(mediaData.history);
           setFavorites(mediaData.favorites);
         }
@@ -278,10 +343,11 @@ export default function App() {
       const completedJob = completedScanJobFromSummary(result);
       const [sourceData, mediaData] = await Promise.all([
         api.sources(),
-        loadMediaCollections()
+        loadMediaCollections(libraryQueryRef.current)
       ]);
       setSources(sourceData);
       setLibraryItems(mediaData.libraryItems);
+      setLibraryFacets(mediaData.libraryFacets);
       setHistory(mediaData.history);
       setFavorites(mediaData.favorites);
       setScanJob(completedJob);
@@ -305,10 +371,11 @@ export default function App() {
       const completedRefresh = metadataRefreshFromSummary(result);
       const [sourceData, mediaData] = await Promise.all([
         api.sources(),
-        loadMediaCollections()
+        loadMediaCollections(libraryQueryRef.current)
       ]);
       setSources(sourceData);
       setLibraryItems(mediaData.libraryItems);
+      setLibraryFacets(mediaData.libraryFacets);
       setHistory(mediaData.history);
       setFavorites(mediaData.favorites);
       setMetadataRefresh(completedRefresh);
@@ -394,7 +461,12 @@ export default function App() {
         {view === "index" && (
           <LibraryPage
             items={libraryItems}
+            facets={libraryFacets}
+            query={libraryQuery}
+            loading={libraryLoading}
+            sources={sources}
             favoritePaths={favoritePaths}
+            onQueryChange={updateLibraryQuery}
             onPlay={play}
             onToggleFavorite={toggleFavorite}
             onScanLibrary={scanLibrary}
@@ -462,17 +534,81 @@ function DependencyStatus({ health }) {
   );
 }
 
-async function loadMediaCollections() {
-  const [libraryData, historyData, favoriteData] = await Promise.all([
-    api.library(),
+async function loadMediaCollections(query = DEFAULT_LIBRARY_QUERY) {
+  const [libraryData, libraryFacets, historyData, favoriteData] = await Promise.all([
+    api.library(libraryRequestParams(query)),
+    loadLibraryFacets(),
     api.history(),
     api.favorites()
   ]);
   return {
     libraryItems: libraryData.items || [],
+    libraryFacets,
     history: historyData,
     favorites: favoriteData
   };
+}
+
+async function loadLibraryFacets() {
+  try {
+    return await api.libraryFacets();
+  } catch {
+    return null;
+  }
+}
+
+function libraryRequestParams(query = DEFAULT_LIBRARY_QUERY) {
+  const normalized = normalizeLibraryQuery(query);
+  const params = {
+    search: normalized.search,
+    sort: normalized.sort,
+    limit: 500,
+    includeUnavailable: true,
+    year: filterValue(normalized.year),
+    quality: filterValue(normalized.quality),
+    sourceId: filterValue(normalized.sourceId)
+  };
+
+  if (normalized.segment === "movie") {
+    params.mediaType = "movie";
+  } else if (normalized.segment === "tv") {
+    params.mediaType = "tv";
+  } else if (normalized.segment === "favorites") {
+    params.favorite = true;
+  } else if (normalized.segment === "offline") {
+    params.available = false;
+  }
+
+  return params;
+}
+
+function normalizeLibraryQuery(query = DEFAULT_LIBRARY_QUERY) {
+  return {
+    search: query.search || "",
+    sort: query.sort || "recent",
+    segment: normalizeSegment(query.segment),
+    year: normalizeFilterValue(query.year),
+    quality: normalizeFilterValue(query.quality),
+    sourceId: normalizeFilterValue(query.sourceId)
+  };
+}
+
+function normalizeSegment(segment) {
+  if (segment === "movie" || segment === "tv" || segment === "favorites" || segment === "offline") {
+    return segment;
+  }
+  return "all";
+}
+
+function normalizeFilterValue(value) {
+  if (value == null || value === "") {
+    return "all";
+  }
+  return String(value);
+}
+
+function filterValue(value) {
+  return value && value !== "all" ? value : undefined;
 }
 
 function isFinalScanStatus(status) {
