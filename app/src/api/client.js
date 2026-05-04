@@ -1,4 +1,5 @@
 const SERVER_URL = "http://127.0.0.1:8765";
+const LEGACY_LIBRARY_SORTS = new Set(["recent", "title", "year", "size"]);
 
 async function request(path, options = {}) {
   const response = await fetch(`${SERVER_URL}${path}`, {
@@ -11,13 +12,17 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
+    let body = null;
     try {
-      const body = await response.json();
-      message = body.detail || message;
+      body = await response.json();
+      message = formatResponseError(body.detail) || message;
     } catch {
       // Keep the HTTP status fallback.
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.body = body;
+    throw error;
   }
 
   if (response.status === 204) {
@@ -42,19 +47,8 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ path, name })
   }),
-  library: ({ search = "", sort = "recent", limit = 200, includeUnavailable = true } = {}) => {
-    const params = new URLSearchParams({
-      limit: String(limit),
-      sort
-    });
-    if (search.trim()) {
-      params.set("search", search.trim());
-    }
-    if (includeUnavailable) {
-      params.set("include_unavailable", "true");
-    }
-    return request(`/library?${params.toString()}`);
-  },
+  library: (options = {}) => requestLibrary(options),
+  libraryFacets: () => request("/library/facets"),
   scanLibrary: (payload = {}) => request("/library/scan", {
     method: "POST",
     body: JSON.stringify(payload)
@@ -94,6 +88,141 @@ export const api = {
     body: JSON.stringify({ key, value })
   })
 };
+
+async function requestLibrary(options = {}) {
+  const params = libraryParams(options);
+  const modernParams = hasModernLibraryParams(params, options.sort || "recent");
+
+  try {
+    return await request(`/library?${params.toString()}`);
+  } catch (error) {
+    if (!modernParams || !shouldRetryLegacyLibrary(error)) {
+      throw error;
+    }
+
+    try {
+      return await request(`/library?${legacyLibraryParams(options).toString()}`);
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function libraryParams(options = {}) {
+  const {
+    search = "",
+    sort = "recent",
+    limit = 200,
+    includeUnavailable = true,
+    mediaType,
+    media_type: mediaTypeSnake,
+    year,
+    quality,
+    sourceId,
+    source_id: sourceIdSnake,
+    favorite,
+    available
+  } = options;
+  const params = new URLSearchParams({
+    limit: String(limit),
+    sort
+  });
+  const trimmedSearch = search.trim();
+  if (trimmedSearch) {
+    params.set("search", trimmedSearch);
+  }
+  if (includeUnavailable) {
+    params.set("include_unavailable", "true");
+  }
+  appendFilterParam(params, "media_type", mediaTypeSnake ?? mediaType);
+  appendFilterParam(params, "year", year);
+  appendFilterParam(params, "quality", quality);
+  appendFilterParam(params, "source_id", sourceIdSnake ?? sourceId);
+  appendBooleanParam(params, "favorite", favorite);
+  appendBooleanParam(params, "available", available);
+  return params;
+}
+
+function legacyLibraryParams(options = {}) {
+  const {
+    search = "",
+    sort = "recent",
+    limit = 200,
+    includeUnavailable = true
+  } = options;
+  const params = new URLSearchParams({
+    limit: String(limit),
+    sort: LEGACY_LIBRARY_SORTS.has(sort) ? sort : "recent"
+  });
+  const trimmedSearch = search.trim();
+  if (trimmedSearch) {
+    params.set("search", trimmedSearch);
+  }
+  if (includeUnavailable) {
+    params.set("include_unavailable", "true");
+  }
+  return params;
+}
+
+function appendFilterParam(params, key, value) {
+  if (value == null || value === "" || value === "all") {
+    return;
+  }
+  params.set(key, String(value));
+}
+
+function appendBooleanParam(params, key, value) {
+  if (value == null || value === "" || value === "all") {
+    return;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "false") {
+      params.set(key, normalized);
+    }
+    return;
+  }
+  params.set(key, value ? "true" : "false");
+}
+
+function hasModernLibraryParams(params, sort) {
+  return (
+    !LEGACY_LIBRARY_SORTS.has(sort) ||
+    params.has("media_type") ||
+    params.has("year") ||
+    params.has("quality") ||
+    params.has("source_id") ||
+    params.has("favorite") ||
+    params.has("available")
+  );
+}
+
+function shouldRetryLegacyLibrary(error) {
+  return error?.status === 400 || error?.status === 404 || error?.status === 422;
+}
+
+function formatResponseError(detail) {
+  if (!detail) {
+    return "";
+  }
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    return detail.map(formatResponseError).filter(Boolean).join("; ");
+  }
+  if (detail.message) {
+    return String(detail.message);
+  }
+  if (detail.msg) {
+    return String(detail.msg);
+  }
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+}
 
 export function mediaUrl(path) {
   if (!path) {

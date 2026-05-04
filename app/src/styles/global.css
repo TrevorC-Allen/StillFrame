@@ -337,13 +337,14 @@ h2 {
 
 .library-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-height: 40px;
 }
 
 .library-heading {
-  flex: 1;
+  flex: 1 1 160px;
   min-width: 150px;
 }
 
@@ -356,9 +357,10 @@ h2 {
 
 .library-search {
   display: flex;
+  flex: 1 1 220px;
   align-items: center;
   gap: 7px;
-  width: min(260px, 28vw);
+  width: min(300px, 100%);
   min-height: 34px;
   border: 1px solid #303746;
   border-radius: 8px;
@@ -378,6 +380,7 @@ h2 {
 
 .library-sort {
   min-height: 34px;
+  max-width: 180px;
   border: 1px solid #303746;
   border-radius: 8px;
   padding: 0 9px;
@@ -393,6 +396,138 @@ h2 {
 .library-toolbar .metadata-refresh-button {
   min-height: 34px;
   white-space: nowrap;
+}
+
+.library-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  border: 1px solid #303746;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #151820;
+  color: #8d96a8;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.stat-chip strong {
+  color: #f5f7fb;
+  font-size: 12px;
+}
+
+.stat-chip.live {
+  border-color: rgba(127, 199, 199, 0.38);
+  color: #7fc7c7;
+}
+
+.library-facet-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #303746;
+  border-radius: 8px;
+  padding: 3px;
+  background: #10141b;
+}
+
+.segmented-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 9px;
+  background: transparent;
+  color: #aab3c2;
+  font-size: 12px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.segmented-control button:hover {
+  color: #ffffff;
+  background: #232a35;
+}
+
+.segmented-control button.active {
+  color: #ffffff;
+  background: #303746;
+}
+
+.segmented-control strong {
+  color: #7fc7c7;
+  font-size: 11px;
+}
+
+.segmented-control button.active strong {
+  color: #e6b450;
+}
+
+.facet-selects {
+  display: flex;
+  flex: 1 1 260px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.facet-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  max-width: 240px;
+  border: 1px solid #303746;
+  border-radius: 8px;
+  padding: 0 4px 0 9px;
+  background: #10141b;
+  color: #8d96a8;
+}
+
+.facet-select span {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.facet-select select {
+  min-width: 112px;
+  max-width: 150px;
+  min-height: 30px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f5f7fb;
+  font-size: 13px;
+}
+
+.facet-select.source select {
+  min-width: 140px;
+  max-width: 190px;
 }
 
 .scan-note {

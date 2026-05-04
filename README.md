@@ -6,7 +6,7 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 
 - Local folders and Finder-mounted NAS paths.
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
-- Local library indexing for faster shelves, full-library search, and whole-library views.
+- Local library indexing for faster shelves, full-library search, facets, and whole-library views.
 - Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
 - Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, and mpv launch actions.
 - Local subtitles matched from the media folder.
@@ -65,7 +65,7 @@ npm install
 npm run dev
 ```
 
-The Electron shell includes an indexed Library view with background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
+The Electron shell includes an indexed Library view with segmented media filters, year/quality/source facets, background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
 
 ## Web MVP Shortcuts
 
@@ -85,7 +85,8 @@ The local API listens on `http://127.0.0.1:8765`.
 - `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg presence, paths, versions, preview support, playback issues, and install hints.
 - `GET /sources`
 - `POST /sources`
-- `GET /library`
+- `GET /library` supports search/sort and may support `media_type`, `year`, `quality`, `source_id`, `favorite`, and `available` filters.
+- `GET /library/facets`
 - `POST /library/scan` starts a background scan job by default.
 - `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
 - `GET /library/scan/jobs`
