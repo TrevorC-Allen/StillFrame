@@ -6,6 +6,7 @@ import StillFrameKit
 final class AppModel: ObservableObject {
     @Published var health: HealthResponse?
     @Published var diagnostics: PlaybackDiagnosticsResponse?
+    @Published var cacheDiagnostics: CacheDiagnosticsResponse?
     @Published var facets: LibraryFacetsResponse?
     @Published var libraryItems: [MediaItem] = []
     @Published var selectedItem: MediaItem?
@@ -39,6 +40,7 @@ final class AppModel: ObservableObject {
         do {
             async let healthResponse = api.health()
             async let diagnosticsResponse = api.playbackDiagnostics()
+            async let cacheResponse = api.cacheDiagnostics()
             async let facetsResponse = api.facets()
             async let libraryResponse = api.library(
                 search: normalizedSearch,
@@ -49,6 +51,7 @@ final class AppModel: ObservableObject {
 
             health = try await healthResponse
             diagnostics = try await diagnosticsResponse
+            cacheDiagnostics = try await cacheResponse
             facets = try await facetsResponse
             libraryItems = try await libraryResponse.items
             reconcileSelection()

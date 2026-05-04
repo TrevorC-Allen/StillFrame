@@ -40,6 +40,24 @@ public struct PlaybackDiagnosticIssue: Codable, Identifiable, Sendable {
     public let action: String
 }
 
+public struct CacheDiagnosticsResponse: Codable, Sendable {
+    public let root: String
+    public let totalFiles: Int
+    public let totalBytes: Int
+    public let buckets: [CacheBucketDiagnostics]
+}
+
+public struct CacheBucketDiagnostics: Codable, Identifiable, Sendable {
+    public var id: String { name }
+
+    public let name: String
+    public let path: String
+    public let exists: Bool
+    public let files: Int
+    public let bytes: Int
+    public let extensions: [String: Int]
+}
+
 public struct LibraryResponse: Codable, Sendable {
     public let items: [MediaItem]
     public let total: Int

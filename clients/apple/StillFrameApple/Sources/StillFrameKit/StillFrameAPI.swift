@@ -48,6 +48,10 @@ public final class StillFrameAPI: @unchecked Sendable {
         try await get("/diagnostics/playback")
     }
 
+    public func cacheDiagnostics() async throws -> CacheDiagnosticsResponse {
+        try await get("/diagnostics/cache")
+    }
+
     public func library(
         search: String? = nil,
         sort: String = "title",
@@ -89,6 +93,10 @@ public final class StillFrameAPI: @unchecked Sendable {
 
     public func facets() async throws -> LibraryFacetsResponse {
         try await get("/library/facets")
+    }
+
+    public func mediaDetails(path: String) async throws -> MediaItem {
+        try await get("/media/details", query: [URLQueryItem(name: "path", value: path)])
     }
 
     public func favorites() async throws -> [MediaItem] {

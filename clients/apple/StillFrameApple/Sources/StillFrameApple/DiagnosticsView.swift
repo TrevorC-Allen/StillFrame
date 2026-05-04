@@ -35,6 +35,34 @@ struct DiagnosticsView: View {
                 }
             }
 
+            Section("Media Cache") {
+                LabeledContent("Root") {
+                    Text(model.cacheDiagnostics?.root ?? "-")
+                        .textSelection(.enabled)
+                }
+                LabeledContent("Files") {
+                    Text(formatCount(model.cacheDiagnostics?.totalFiles))
+                }
+                LabeledContent("Storage") {
+                    Text(formatBytes(model.cacheDiagnostics?.totalBytes))
+                }
+
+                ForEach(model.cacheDiagnostics?.buckets ?? []) { bucket in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(bucket.name.capitalized)
+                            Spacer()
+                            Text("\(formatCount(bucket.files)) files")
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(bucket.exists ? bucket.path : "Not created yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
             if let issues = model.diagnostics?.issues, !issues.isEmpty {
                 Section("Issues") {
                     ForEach(issues) { issue in
@@ -64,5 +92,20 @@ struct DiagnosticsView: View {
         case nil:
             return "-"
         }
+    }
+
+    private func formatCount(_ value: Int?) -> String {
+        (value ?? 0).formatted()
+    }
+
+    private func formatBytes(_ value: Int?) -> String {
+        let bytes = Double(value ?? 0)
+        guard bytes > 0 else {
+            return "0 B"
+        }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 }
