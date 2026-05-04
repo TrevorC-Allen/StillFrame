@@ -65,7 +65,7 @@ npm install
 npm run dev
 ```
 
-The Electron shell includes an indexed Library view with scan controls, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
+The Electron shell includes an indexed Library view with background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
 
 ## Web MVP Shortcuts
 

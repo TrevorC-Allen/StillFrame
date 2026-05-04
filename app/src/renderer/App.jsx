@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { api } from "../api/client.js";
@@ -22,13 +22,14 @@ export default function App() {
   const [view, setView] = useState("library");
   const [activePath, setActivePath] = useState(null);
   const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanSummary, setScanSummary] = useState(null);
+  const [scanJob, setScanJob] = useState(null);
+  const [scanStarting, setScanStarting] = useState(false);
 
   const favoritePaths = useMemo(
     () => new Set(favorites.map((favorite) => favorite.path)),
     [favorites]
   );
+  const scanning = scanStarting || scanJob?.status === "running";
 
   useEffect(() => {
     refreshAll();
@@ -48,15 +49,68 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!scanJob?.id || scanJob.status !== "running") {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timeoutId = null;
+
+    async function pollScanJob() {
+      try {
+        const latest = await api.scanJob(scanJob.id);
+        if (cancelled) {
+          return;
+        }
+
+        if (isFinalScanStatus(latest.status)) {
+          const [sourceData, mediaData] = await Promise.all([
+            api.sources(),
+            loadMediaCollections()
+          ]);
+          if (cancelled) {
+            return;
+          }
+          setSources(sourceData);
+          setLibraryItems(mediaData.libraryItems);
+          setHistory(mediaData.history);
+          setFavorites(mediaData.favorites);
+          setScanJob(latest);
+          return;
+        }
+
+        setScanJob(latest);
+      } catch (caught) {
+        if (!cancelled) {
+          setError(caught.message);
+        }
+      }
+
+      if (!cancelled) {
+        timeoutId = window.setTimeout(pollScanJob, 1500);
+      }
+    }
+
+    timeoutId = window.setTimeout(pollScanJob, 900);
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [scanJob?.id, scanJob?.status]);
+
   async function refreshAll() {
     try {
-      const [healthData, sourceData, libraryData, historyData, favoriteData, settingData] = await Promise.all([
+      const [healthData, sourceData, libraryData, historyData, favoriteData, settingData, scanJobsData] = await Promise.all([
         api.health(),
         api.sources(),
         api.library(),
         api.history(),
         api.favorites(),
-        api.settings()
+        api.settings(),
+        api.scanJobs({ limit: 1 })
       ]);
       setHealth(healthData);
       setSources(sourceData);
@@ -64,6 +118,7 @@ export default function App() {
       setHistory(historyData);
       setFavorites(favoriteData);
       setSettings(settingData);
+      setScanJob(scanJobsData.items?.[0] || null);
       if (!browseData && !browseError && sourceData.length > 0) {
         const firstAvailable = sourceData.find((source) => source.available !== false);
         if (firstAvailable) {
@@ -80,16 +135,12 @@ export default function App() {
     }
   }
 
-  async function refreshMediaCollections() {
-    const [libraryData, historyData, favoriteData] = await Promise.all([
-      api.library(),
-      api.history(),
-      api.favorites()
-    ]);
-    setLibraryItems(libraryData.items || []);
-    setHistory(historyData);
-    setFavorites(favoriteData);
-  }
+  const refreshMediaCollections = useCallback(async () => {
+    const mediaData = await loadMediaCollections();
+    setLibraryItems(mediaData.libraryItems);
+    setHistory(mediaData.history);
+    setFavorites(mediaData.favorites);
+  }, []);
 
   async function addFolder() {
     setError(null);
@@ -203,19 +254,38 @@ export default function App() {
       return;
     }
     setError(null);
-    setScanning(true);
+    setScanStarting(true);
     try {
       const result = await api.scanLibrary();
-      const [sourceData] = await Promise.all([
+      if (result?.id) {
+        setScanJob(result);
+        if (isFinalScanStatus(result.status)) {
+          const [sourceData, mediaData] = await Promise.all([
+            api.sources(),
+            loadMediaCollections()
+          ]);
+          setSources(sourceData);
+          setLibraryItems(mediaData.libraryItems);
+          setHistory(mediaData.history);
+          setFavorites(mediaData.favorites);
+        }
+        return;
+      }
+
+      const completedJob = completedScanJobFromSummary(result);
+      const [sourceData, mediaData] = await Promise.all([
         api.sources(),
-        refreshMediaCollections()
+        loadMediaCollections()
       ]);
       setSources(sourceData);
-      setScanSummary(result);
+      setLibraryItems(mediaData.libraryItems);
+      setHistory(mediaData.history);
+      setFavorites(mediaData.favorites);
+      setScanJob(completedJob);
     } catch (caught) {
       setError(caught.message);
     } finally {
-      setScanning(false);
+      setScanStarting(false);
     }
   }
 
@@ -230,6 +300,7 @@ export default function App() {
         onViewChange={setView}
         onScanLibrary={scanLibrary}
         scanning={scanning}
+        scanJob={scanJob}
       />
 
       <main className="workspace">
@@ -280,7 +351,7 @@ export default function App() {
             onToggleFavorite={toggleFavorite}
             onScanLibrary={scanLibrary}
             scanning={scanning}
-            scanSummary={scanSummary}
+            scanJob={scanJob}
           />
         )}
 
@@ -336,4 +407,37 @@ function DependencyStatus({ health }) {
       <span>{ready ? "Ready" : "Needs setup"}</span>
     </div>
   );
+}
+
+async function loadMediaCollections() {
+  const [libraryData, historyData, favoriteData] = await Promise.all([
+    api.library(),
+    api.history(),
+    api.favorites()
+  ]);
+  return {
+    libraryItems: libraryData.items || [],
+    history: historyData,
+    favorites: favoriteData
+  };
+}
+
+function isFinalScanStatus(status) {
+  return status === "completed" || status === "failed";
+}
+
+function completedScanJobFromSummary(summary) {
+  const data = summary || {};
+  return {
+    id: null,
+    status: "completed",
+    source_id: data.source_id ?? null,
+    limit: data.limit ?? 0,
+    items_indexed: data.items_indexed ?? 0,
+    sources_scanned: data.sources_scanned ?? 0,
+    sources_skipped: data.sources_skipped ?? 0,
+    error: null,
+    started_at: data.started_at ?? null,
+    completed_at: data.completed_at ?? new Date().toISOString()
+  };
 }

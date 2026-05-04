@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, FolderOpen, Library, Plus, RefreshCw, Settings, Star } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, Clock, FolderOpen, Library, Plus, RefreshCw, Settings, Star } from "lucide-react";
 
 export function Sidebar({
   sources,
@@ -8,7 +8,8 @@ export function Sidebar({
   onOpenSource,
   onViewChange,
   onScanLibrary,
-  scanning
+  scanning,
+  scanJob
 }) {
   return (
     <aside className="sidebar">
@@ -62,6 +63,8 @@ export function Sidebar({
         </span>
       </div>
 
+      <SidebarScanStatus job={scanJob} />
+
       <div className="source-list">
         {sources.map((source) => (
           <button
@@ -84,4 +87,37 @@ export function Sidebar({
       </div>
     </aside>
   );
+}
+
+function SidebarScanStatus({ job }) {
+  if (!job) {
+    return null;
+  }
+
+  const Icon = job.status === "completed" ? CheckCircle2 : job.status === "failed" ? AlertCircle : RefreshCw;
+  return (
+    <div className={`sidebar-scan ${job.status}`}>
+      <span className="sidebar-scan-title">
+        <Icon size={15} className={job.status === "running" ? "spinning" : ""} />
+        <strong>{scanStatusLabel(job.status)}</strong>
+      </span>
+      <span>{formatCount(job.items_indexed)} indexed</span>
+      <span>{formatCount(job.sources_skipped)} skipped</span>
+      {job.error && <span className="sidebar-scan-error">{job.error}</span>}
+    </div>
+  );
+}
+
+function scanStatusLabel(status) {
+  if (status === "completed") {
+    return "Scan completed";
+  }
+  if (status === "failed") {
+    return "Scan failed";
+  }
+  return "Scan running";
+}
+
+function formatCount(value) {
+  return Number.isFinite(value) ? value : 0;
 }

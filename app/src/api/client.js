@@ -46,10 +46,17 @@ export const api = {
     }
     return request(`/library?${params.toString()}`);
   },
-  scanLibrary: () => request("/library/scan", {
+  scanLibrary: (payload = {}) => request("/library/scan", {
     method: "POST",
-    body: JSON.stringify({ synchronous: true })
+    body: JSON.stringify(payload)
   }),
+  scanJobs: ({ limit = 20 } = {}) => {
+    const params = new URLSearchParams({
+      limit: String(limit)
+    });
+    return request(`/library/scan/jobs?${params.toString()}`);
+  },
+  scanJob: (id) => request(`/library/scan/jobs/${encodeURIComponent(id)}`),
   browse: (path) => request(`/browse?path=${encodeURIComponent(path)}`),
   play: (path, options = {}) => request("/play", {
     method: "POST",
