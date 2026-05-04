@@ -234,6 +234,81 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     assert cleared_history_response.json() == []
 
 
+def test_media_stream_error_responses(tmp_path: Path) -> None:
+    media = tmp_path / "Sample.mp4"
+    notes = tmp_path / "notes.txt"
+    loop = tmp_path / "loop.mp4"
+    media.write_bytes(b"0123456789")
+    notes.write_text("not a video", encoding="utf-8")
+    loop.symlink_to(loop)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        missing_response = client.get("/media/stream", params={"path": str(tmp_path / "missing.mp4")})
+        non_video_response = client.get("/media/stream", params={"path": str(notes)})
+        invalid_path_response = client.get("/media/stream", params={"path": str(loop)})
+        invalid_range_response = client.get(
+            "/media/stream",
+            params={"path": str(media)},
+            headers={"Range": "bytes=abc-def"},
+        )
+
+    assert missing_response.status_code == 404
+    assert "Media file does not exist" in missing_response.json()["detail"]
+    assert non_video_response.status_code == 400
+    assert non_video_response.json()["detail"] == "Path is not a supported video file"
+    assert invalid_path_response.status_code == 400
+    assert "Invalid media path" in invalid_path_response.json()["detail"]
+    assert invalid_range_response.status_code == 416
+    assert invalid_range_response.json()["detail"] == "Invalid range header"
+
+
+def test_play_error_responses(tmp_path: Path, monkeypatch) -> None:
+    app_state.database.path = tmp_path / "play-errors.db"
+    app_state.initialize()
+    app_state.mpv_controller.stop()
+    media = tmp_path / "Playable.mp4"
+    notes = tmp_path / "notes.txt"
+    loop = tmp_path / "loop.mp4"
+    media.write_bytes(b"fake video")
+    notes.write_text("not a video", encoding="utf-8")
+    loop.symlink_to(loop)
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        missing_response = client.post("/play", json={"path": str(tmp_path / "missing.mp4")})
+        directory_response = client.post("/play", json={"path": str(tmp_path)})
+        non_video_response = client.post("/play", json={"path": str(notes)})
+        invalid_path_response = client.post("/play", json={"path": str(loop)})
+        monkeypatch.setattr("player.mpv_controller.shutil.which", lambda name: None)
+        missing_mpv_response = client.post("/play", json={"path": str(media)})
+
+    assert missing_response.status_code == 404
+    assert "Media file does not exist" in missing_response.json()["detail"]
+    assert directory_response.status_code == 400
+    assert "not a file" in directory_response.json()["detail"]
+    assert non_video_response.status_code == 400
+    assert "supported video file" in non_video_response.json()["detail"]
+    assert invalid_path_response.status_code == 400
+    assert "Invalid media path" in invalid_path_response.json()["detail"]
+    assert missing_mpv_response.status_code == 503
+    assert missing_mpv_response.json()["detail"] == "mpv is not installed or not on PATH"
+
+
+def test_player_command_error_responses() -> None:
+    app_state.mpv_controller.stop()
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        no_media_response = client.post("/player/command", json={"command": "pause"})
+        invalid_command_response = client.post("/player/command", json={"command": "dance"})
+        invalid_open_response = client.post("/player/command", json={"command": "open", "value": 123})
+
+    assert no_media_response.status_code == 409
+    assert no_media_response.json()["detail"] == "No media is currently open"
+    assert invalid_command_response.status_code == 400
+    assert invalid_command_response.json()["detail"] == "Unsupported player command: dance"
+    assert invalid_open_response.status_code == 400
+    assert invalid_open_response.json()["detail"] == "open command requires a media path string"
+
+
 def test_library_scan_job_endpoints(tmp_path: Path) -> None:
     app_state.database.path = tmp_path / "scan-jobs.db"
     app_state.initialize()

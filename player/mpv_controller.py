@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from app.config import VIDEO_EXTENSIONS
+
 
 class MPVUnavailableError(RuntimeError):
     pass
@@ -35,9 +37,7 @@ class MPVController:
         }
 
     def open(self, media_path: str, *, start_position: float = 0, subtitles: Optional[list[str]] = None) -> dict[str, Any]:
-        path = Path(media_path).expanduser().resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Media file does not exist: {path}")
+        path = self._resolve_video_path(media_path)
 
         mpv = shutil.which("mpv")
         if not mpv:
@@ -132,6 +132,23 @@ class MPVController:
         return dict(self.state)
 
     def command(self, name: str, value: Any = None) -> dict[str, Any]:
+        if name == "stop":
+            self.stop()
+            return dict(self.state)
+
+        if name not in {
+            "pause",
+            "resume",
+            "seek",
+            "set_speed",
+            "select_audio",
+            "select_subtitle",
+            "set_sub_delay",
+        }:
+            raise ValueError(f"Unsupported player command: {name}")
+
+        self._require_active_media()
+
         if name == "pause":
             self._send(["set_property", "pause", True])
         elif name == "resume":
@@ -146,11 +163,6 @@ class MPVController:
             self._send(["set_property", "sid", value])
         elif name == "set_sub_delay":
             self._send(["set_property", "sub-delay", float(value or 0)])
-        elif name == "stop":
-            self.stop()
-            return dict(self.state)
-        else:
-            raise ValueError(f"Unsupported player command: {name}")
         return self.get_state()
 
     def stop(self) -> None:
@@ -198,3 +210,24 @@ class MPVController:
             return {}
         return json.loads(raw.decode("utf-8"))
 
+    def _resolve_video_path(self, media_path: str) -> Path:
+        try:
+            path = Path(media_path).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError(f"Invalid media path: {exc}") from exc
+        if not path.exists():
+            raise FileNotFoundError(f"Media file does not exist: {path}")
+        if not path.is_file():
+            raise ValueError(f"Media path is not a file: {path}")
+        if path.suffix.lower() not in VIDEO_EXTENSIONS:
+            raise ValueError(f"Path is not a supported video file: {path}")
+        return path
+
+    def _require_active_media(self) -> None:
+        if self.process and self.process.poll() is None:
+            return
+        if self.process and self.process.poll() is not None:
+            self.state["ended"] = True
+        self.state["running"] = False
+        self.state["error"] = "No media is currently open"
+        raise OSError(self.state["error"])

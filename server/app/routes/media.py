@@ -32,7 +32,7 @@ def stream_media(
     path: str = Query(..., min_length=1),
     range_header: Optional[str] = Header(default=None, alias="Range"),
 ) -> Response:
-    media_path = Path(path).expanduser().resolve()
+    media_path = _resolve_requested_path(path, "media")
     if not media_path.exists() or not media_path.is_file():
         raise HTTPException(status_code=404, detail=f"Media file does not exist: {media_path}")
     if media_path.suffix.lower() not in VIDEO_EXTENSIONS:
@@ -61,7 +61,7 @@ def stream_media(
 
 @router.get("/media/artwork")
 def media_artwork(path: str = Query(..., min_length=1)) -> FileResponse:
-    artwork_path = Path(path).expanduser().resolve()
+    artwork_path = _resolve_requested_path(path, "artwork")
     if not artwork_path.exists() or not artwork_path.is_file():
         raise HTTPException(status_code=404, detail="Artwork not found")
     if artwork_path.suffix.lower() not in ARTWORK_EXTENSIONS:
@@ -70,18 +70,32 @@ def media_artwork(path: str = Query(..., min_length=1)) -> FileResponse:
     return FileResponse(artwork_path, media_type=media_type)
 
 
+def _resolve_requested_path(raw_path: str, media_kind: str) -> Path:
+    try:
+        return Path(raw_path).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {media_kind} path: {exc}") from exc
+
+
 def _parse_range(range_header: str, file_size: int) -> tuple[int, int]:
     if not range_header.startswith("bytes="):
         raise HTTPException(status_code=416, detail="Invalid range header")
 
-    raw_start, raw_end = range_header.removeprefix("bytes=").split("-", 1)
-    if raw_start == "":
-        suffix_length = int(raw_end)
-        start = max(file_size - suffix_length, 0)
-        end = file_size - 1
-    else:
-        start = int(raw_start)
-        end = int(raw_end) if raw_end else file_size - 1
+    try:
+        raw_start, raw_end = range_header.removeprefix("bytes=").split("-", 1)
+        if raw_start == "":
+            if not raw_end:
+                raise ValueError
+            suffix_length = int(raw_end)
+            if suffix_length <= 0:
+                raise ValueError
+            start = max(file_size - suffix_length, 0)
+            end = file_size - 1
+        else:
+            start = int(raw_start)
+            end = int(raw_end) if raw_end else file_size - 1
+    except ValueError as exc:
+        raise HTTPException(status_code=416, detail="Invalid range header") from exc
 
     if start >= file_size or end < start:
         raise HTTPException(status_code=416, detail="Requested range not satisfiable")
