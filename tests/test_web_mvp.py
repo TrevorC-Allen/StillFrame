@@ -45,6 +45,17 @@ def test_web_mvp_home_and_health() -> None:
     assert "library-shelf" in home.text
     assert "library-filter" in home.text
     assert "library-sort" in home.text
+    assert "library-facets" in home.text
+    assert "library-facet-tabs" in home.text
+    assert "library-facet-all" in home.text
+    assert "library-facet-movie" in home.text
+    assert "library-facet-tv" in home.text
+    assert "library-facet-favorites" in home.text
+    assert "library-facet-offline" in home.text
+    assert "library-year-filter" in home.text
+    assert "library-quality-filter" in home.text
+    assert "library-source-filter" in home.text
+    assert "library-facet-stats" in home.text
     assert "media-detail-drawer" in home.text
     assert "detail-poster" in home.text
     assert "detail-overview" in home.text
@@ -72,6 +83,11 @@ def test_web_mvp_home_and_health() -> None:
     assert "/diagnostics/playback" in script.text
     assert "playbackDiagnostics" in script.text
     assert "/library/scan/jobs/" in script.text
+    assert "/library/facets" in script.text
+    assert "media_type" in script.text
+    assert "source_id" in script.text
+    assert "available" in script.text
+    assert "buildLibraryFacetsFromRows" in script.text
     assert "/library/metadata/refresh" in script.text
     assert "refreshMetadata" in script.text
     assert "scheduleScanPoll" in script.text
