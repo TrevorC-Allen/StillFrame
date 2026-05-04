@@ -97,6 +97,95 @@ class LibraryService:
             )
         return int(cursor.rowcount or 0)
 
+    def create_scan_job(self, *, source_id: Optional[int] = None, limit: int = 5000) -> dict[str, Any]:
+        now = utc_now()
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO scan_jobs (
+                    status, source_id, "limit", items_indexed, sources_scanned,
+                    sources_skipped, error, started_at, completed_at
+                )
+                VALUES (?, ?, ?, 0, 0, 0, NULL, ?, NULL)
+                """,
+                ("running", source_id, limit, now),
+            )
+            row = self._get_scan_job_row(connection, int(cursor.lastrowid))
+        return dict(row)
+
+    def complete_scan_job(self, job_id: int, summary: dict[str, Any]) -> dict[str, Any]:
+        completed_at = utc_now()
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE scan_jobs
+                SET
+                    status = ?,
+                    items_indexed = ?,
+                    sources_scanned = ?,
+                    sources_skipped = ?,
+                    error = NULL,
+                    completed_at = ?
+                WHERE id = ?
+                """,
+                (
+                    "completed",
+                    int(summary.get("items_indexed") or 0),
+                    int(summary.get("sources_scanned") or 0),
+                    int(summary.get("sources_skipped") or 0),
+                    completed_at,
+                    job_id,
+                ),
+            )
+            row = self._get_scan_job_row(connection, job_id)
+        return dict(row)
+
+    def fail_scan_job(self, job_id: int, error: str) -> dict[str, Any]:
+        completed_at = utc_now()
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE scan_jobs
+                SET status = ?, error = ?, completed_at = ?
+                WHERE id = ?
+                """,
+                ("failed", error, completed_at, job_id),
+            )
+            row = self._get_scan_job_row(connection, job_id)
+        return dict(row)
+
+    def get_scan_job(self, job_id: int) -> Optional[dict[str, Any]]:
+        with self.database.connect() as connection:
+            row = self._get_scan_job_row(connection, job_id)
+        return dict(row) if row else None
+
+    def list_scan_jobs(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    id, status, source_id, "limit", items_indexed,
+                    sources_scanned, sources_skipped, error, started_at, completed_at
+                FROM scan_jobs
+                ORDER BY started_at DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def _get_scan_job_row(self, connection: Any, job_id: int) -> Any:
+        return connection.execute(
+            """
+            SELECT
+                id, status, source_id, "limit", items_indexed,
+                sources_scanned, sources_skipped, error, started_at, completed_at
+            FROM scan_jobs
+            WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+
     def upsert_media_items(self, items: list[dict[str, Any]]) -> int:
         if not items:
             return 0

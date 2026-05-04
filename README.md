@@ -82,7 +82,10 @@ The local API listens on `http://127.0.0.1:8765`.
 - `GET /sources`
 - `POST /sources`
 - `GET /library`
-- `POST /library/scan`
+- `POST /library/scan` starts a background scan job by default.
+- `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
+- `GET /library/scan/jobs`
+- `GET /library/scan/jobs/{id}`
 - `POST /history/clear`
 - `GET /browse?path=...`
 - `POST /play`

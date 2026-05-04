@@ -60,7 +60,10 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
 
     with TestClient(app) as client:
         source_response = client.post("/sources", json={"path": str(tmp_path)})
-        scan_response = client.post("/library/scan", json={"source_id": source_response.json()["id"]})
+        scan_response = client.post(
+            "/library/scan",
+            json={"source_id": source_response.json()["id"], "synchronous": True},
+        )
         library_response = client.get("/library", params={"search": "Sample"})
         browse_response = client.get("/browse", params={"path": str(tmp_path)})
         stream_response = client.get(
@@ -130,6 +133,40 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     assert clear_history_response.status_code == 200
     assert clear_history_response.json()["deleted"] == 1
     assert cleared_history_response.json() == []
+
+
+def test_library_scan_job_endpoints(tmp_path: Path) -> None:
+    app_state.database.path = tmp_path / "scan-jobs.db"
+    app_state.initialize()
+    media = tmp_path / "Job.Sample.2026.1080p.mp4"
+    media.write_bytes(b"0123456789" * 1024)
+
+    with TestClient(app) as client:
+        source_response = client.post("/sources", json={"path": str(tmp_path)})
+        job_response = client.post(
+            "/library/scan",
+            json={"source_id": source_response.json()["id"], "limit": 5},
+        )
+        job_id = job_response.json()["id"]
+        job_status_response = client.get(f"/library/scan/jobs/{job_id}")
+        jobs_response = client.get("/library/scan/jobs")
+        library_response = client.get("/library", params={"search": "Job Sample"})
+
+    assert source_response.status_code == 200
+    assert job_response.status_code == 200
+    assert job_response.json()["status"] == "running"
+    assert job_response.json()["source_id"] == source_response.json()["id"]
+    assert job_response.json()["limit"] == 5
+    assert job_status_response.status_code == 200
+    assert job_status_response.json()["status"] == "completed"
+    assert job_status_response.json()["items_indexed"] == 1
+    assert job_status_response.json()["sources_scanned"] == 1
+    assert job_status_response.json()["sources_skipped"] == 0
+    assert job_status_response.json()["completed_at"] is not None
+    assert jobs_response.status_code == 200
+    assert jobs_response.json()["items"][0]["id"] == job_id
+    assert library_response.status_code == 200
+    assert library_response.json()["items"][0]["name"] == "Job.Sample.2026.1080p.mp4"
 
 
 def test_native_folder_picker_endpoint(monkeypatch) -> None:

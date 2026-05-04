@@ -129,6 +129,26 @@ class PlaybackUpdate(BaseModel):
 class LibraryScanRequest(BaseModel):
     source_id: Optional[int] = None
     limit: int = Field(default=5000, ge=1, le=50000)
+    synchronous: bool = False
+    wait: bool = False
+
+
+class LibraryScanJob(BaseModel):
+    id: int
+    status: str = Field(pattern="^(running|completed|failed)$")
+    source_id: Optional[int] = None
+    limit: int
+    items_indexed: int
+    sources_scanned: int
+    sources_skipped: int
+    error: Optional[str] = None
+    started_at: str
+    completed_at: Optional[str] = None
+
+
+class LibraryScanJobsResponse(BaseModel):
+    items: list[LibraryScanJob]
+    total: int
 
 
 class SettingUpdate(BaseModel):

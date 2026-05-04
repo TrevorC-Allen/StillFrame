@@ -67,6 +67,23 @@ CREATE TABLE IF NOT EXISTS media_items (
 CREATE INDEX IF NOT EXISTS idx_media_items_source_id ON media_items(source_id);
 CREATE INDEX IF NOT EXISTS idx_media_items_title ON media_items(title COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_media_items_modified_at ON media_items(modified_at);
+
+CREATE TABLE IF NOT EXISTS scan_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL,
+    source_id INTEGER,
+    "limit" INTEGER NOT NULL,
+    items_indexed INTEGER NOT NULL DEFAULT 0,
+    sources_scanned INTEGER NOT NULL DEFAULT 0,
+    sources_skipped INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY(source_id) REFERENCES sources(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_started_at ON scan_jobs(started_at);
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON scan_jobs(status);
 """
 
 
