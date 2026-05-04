@@ -209,6 +209,7 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
         )
         library_response = client.get("/library", params={"search": "Sample"})
         browse_response = client.get("/browse", params={"path": str(tmp_path)})
+        details_response = client.get("/media/details", params={"path": str(media)})
         stream_response = client.get(
             "/media/stream",
             params={"path": str(media)},
@@ -256,6 +257,13 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     assert sample_item["year"] == 2025
     assert sample_item["quality"] == "1080P"
     assert sample_item["artwork_url"] == f"/media/artwork?path={poster}"
+    assert details_response.status_code == 200
+    details = details_response.json()
+    assert details["path"] == str(media)
+    assert details["display_title"] == "Sample"
+    assert details["artwork_url"] == f"/media/artwork?path={poster}"
+    assert details["overview"]
+    assert details["metadata_source"] in {"local", "tmdb"}
     assert stream_response.status_code == 206
     assert stream_response.headers["content-range"] == "bytes 0-99/10240"
     assert len(stream_response.content) == 100

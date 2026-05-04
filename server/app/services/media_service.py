@@ -391,3 +391,47 @@ class MediaService:
         items.sort(key=lambda item: (item["kind"] != "directory", item["name"].lower()))
         parent = str(path.parent) if path.parent != path else None
         return {"path": str(path), "parent": parent, "items": items}
+
+    def media_details(self, raw_path: str) -> dict[str, Any]:
+        path = Path(raw_path).expanduser().resolve()
+        if not path.exists():
+            raise FileNotFoundError(f"Media file does not exist: {path}")
+        if not path.is_file():
+            raise IsADirectoryError(f"Path is not a media file: {path}")
+        if not self.is_video(path):
+            raise ValueError("Path is not a supported video file")
+
+        stat = path.stat()
+        metadata = self._browse_video_metadata(path)
+        playback = self.library.get_playback(str(path))
+        duration = float(playback["duration"]) if playback and playback["duration"] else 0
+        position = float(playback["position"]) if playback and playback["position"] else 0
+        progress: Optional[float] = None
+        if duration > 0:
+            progress = min(position / duration, 1)
+
+        return {
+            "name": path.name,
+            "title": metadata.get("title"),
+            "display_title": metadata.get("display_title"),
+            "path": str(path),
+            "kind": "video",
+            "size": stat.st_size,
+            "modified_at": stat.st_mtime,
+            "playable": True,
+            "favorite": self.library.is_favorite(str(path)),
+            "progress": progress,
+            "duration": duration if duration > 0 else None,
+            "position": position if position > 0 else None,
+            "year": metadata.get("year"),
+            "season": metadata.get("season"),
+            "episode": metadata.get("episode"),
+            "quality": metadata.get("quality"),
+            "artwork_url": metadata.get("artwork_url"),
+            "overview": metadata.get("overview"),
+            "poster_path": metadata.get("poster_path"),
+            "backdrop_url": metadata.get("backdrop_url"),
+            "media_type": metadata.get("media_type"),
+            "metadata_source": metadata.get("metadata_source"),
+            "metadata_updated_at": metadata.get("metadata_updated_at"),
+        }

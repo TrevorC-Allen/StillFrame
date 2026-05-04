@@ -66,6 +66,7 @@ export const api = {
   },
   scanJob: (id) => request(`/library/scan/jobs/${encodeURIComponent(id)}`),
   browse: (path) => request(`/browse?path=${encodeURIComponent(path)}`),
+  mediaDetails: (path) => request(`/media/details?path=${encodeURIComponent(path)}`),
   play: (path, options = {}) => request("/play", {
     method: "POST",
     body: JSON.stringify({ path, ...options })

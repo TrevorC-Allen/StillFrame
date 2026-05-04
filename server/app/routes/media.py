@@ -8,6 +8,8 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from app.config import ARTWORK_EXTENSIONS, ROOT_DIR, VIDEO_EXTENSIONS
+from app.models.schemas import BrowseItem
+from app.state import media_service
 
 
 router = APIRouter(tags=["media"])
@@ -68,6 +70,18 @@ def media_artwork(path: str = Query(..., min_length=1)) -> FileResponse:
         raise HTTPException(status_code=400, detail="Unsupported artwork file")
     media_type = mimetypes.guess_type(artwork_path.name)[0] or "image/jpeg"
     return FileResponse(artwork_path, media_type=media_type)
+
+
+@router.get("/media/details", response_model=BrowseItem)
+def media_details(path: str = Query(..., min_length=1)) -> dict:
+    try:
+        return media_service.media_details(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IsADirectoryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _resolve_requested_path(raw_path: str, media_kind: str) -> Path:
