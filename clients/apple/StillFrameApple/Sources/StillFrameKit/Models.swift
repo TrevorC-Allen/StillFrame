@@ -98,6 +98,16 @@ public struct BrowseItem: Codable, Identifiable, Hashable, Sendable {
     public let metadataUpdatedAt: String?
 }
 
+public struct MediaSource: Codable, Identifiable, Hashable, Sendable {
+    public let id: Int
+    public let name: String
+    public let path: String
+    public let createdAt: String
+    public let available: Bool
+    public let status: String
+    public let lastError: String?
+}
+
 public struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     public var id: String { path }
     public var resolvedTitle: String { displayTitle ?? title ?? name }

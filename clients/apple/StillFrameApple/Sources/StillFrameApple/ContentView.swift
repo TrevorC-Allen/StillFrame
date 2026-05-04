@@ -2,6 +2,7 @@ import SwiftUI
 
 enum StillFrameTab: String, CaseIterable, Identifiable {
     case library = "Library"
+    case folders = "Folders"
     case diagnostics = "Diagnostics"
     case settings = "Settings"
 
@@ -11,6 +12,8 @@ enum StillFrameTab: String, CaseIterable, Identifiable {
         switch self {
         case .library:
             return "rectangle.grid.2x2"
+        case .folders:
+            return "folder"
         case .diagnostics:
             return "waveform.path.ecg"
         case .settings:
@@ -35,6 +38,8 @@ struct ContentView: View {
             switch selection ?? .library {
             case .library:
                 LibraryView(model: model)
+            case .folders:
+                FoldersView(model: model)
             case .diagnostics:
                 DiagnosticsView(model: model)
             case .settings:

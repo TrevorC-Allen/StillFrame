@@ -52,6 +52,10 @@ public final class StillFrameAPI: @unchecked Sendable {
         try await get("/diagnostics/cache")
     }
 
+    public func sources() async throws -> [MediaSource] {
+        try await get("/sources")
+    }
+
     public func library(
         search: String? = nil,
         sort: String = "title",

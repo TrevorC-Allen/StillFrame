@@ -8,12 +8,15 @@ final class AppModel: ObservableObject {
     @Published var diagnostics: PlaybackDiagnosticsResponse?
     @Published var cacheDiagnostics: CacheDiagnosticsResponse?
     @Published var facets: LibraryFacetsResponse?
+    @Published var sources: [MediaSource] = []
+    @Published var browseResponse: BrowseResponse?
     @Published var libraryItems: [MediaItem] = []
     @Published var selectedItem: MediaItem?
     @Published var searchText: String = ""
     @Published var selectedMediaType: String?
     @Published var sort: String = "title"
     @Published var isLoading = false
+    @Published var isBrowsing = false
     @Published var isRefreshingMetadata = false
     @Published var isStartingScan = false
     @Published var errorMessage: String?
@@ -41,6 +44,7 @@ final class AppModel: ObservableObject {
             async let healthResponse = api.health()
             async let diagnosticsResponse = api.playbackDiagnostics()
             async let cacheResponse = api.cacheDiagnostics()
+            async let sourcesResponse = api.sources()
             async let facetsResponse = api.facets()
             async let libraryResponse = api.library(
                 search: normalizedSearch,
@@ -52,6 +56,7 @@ final class AppModel: ObservableObject {
             health = try await healthResponse
             diagnostics = try await diagnosticsResponse
             cacheDiagnostics = try await cacheResponse
+            sources = try await sourcesResponse
             facets = try await facetsResponse
             libraryItems = try await libraryResponse.items
             reconcileSelection()
@@ -121,6 +126,33 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func playOnHost(_ item: BrowseItem) async {
+        guard let api else {
+            return
+        }
+
+        do {
+            _ = try await api.play(path: item.path)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func browse(path: String) async {
+        guard let api else {
+            return
+        }
+
+        isBrowsing = true
+        errorMessage = nil
+        do {
+            browseResponse = try await api.browse(path: path)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isBrowsing = false
+    }
+
     func startScan() async {
         guard let api else {
             return
@@ -157,7 +189,15 @@ final class AppModel: ObservableObject {
         try? api?.streamURL(forPath: item.path)
     }
 
+    func previewURL(for item: BrowseItem) -> URL? {
+        item.kind == "video" ? (try? api?.streamURL(forPath: item.path)) : nil
+    }
+
     func artworkURL(for item: MediaItem) -> URL? {
+        api?.artworkURL(item.artworkUrl ?? item.posterPath)
+    }
+
+    func artworkURL(for item: BrowseItem) -> URL? {
         api?.artworkURL(item.artworkUrl ?? item.posterPath)
     }
 
