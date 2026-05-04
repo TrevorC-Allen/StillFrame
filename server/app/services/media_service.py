@@ -111,37 +111,16 @@ class MediaService:
                 if indexed_items + len(batch) >= limit:
                     break
                 try:
-                    stat = media_path.stat()
+                    batch.append(
+                        self._build_media_item(
+                            media_path,
+                            source_id=int(source["id"]),
+                            source_path=str(root),
+                            now=now,
+                        )
+                    )
                 except OSError:
                     continue
-                metadata = self.describe_media(media_path)
-                generated = self.metadata.enrich(media_path, metadata)
-                batch.append(
-                    {
-                        "path": str(media_path),
-                        "source_id": int(source["id"]),
-                        "source_path": str(root),
-                        "name": media_path.name,
-                        "title": generated.get("title") or metadata.get("display_title") or media_path.stem,
-                        "display_title": generated.get("display_title") or metadata.get("display_title"),
-                        "year": generated.get("year") or metadata.get("year"),
-                        "season": metadata.get("season"),
-                        "episode": metadata.get("episode"),
-                        "quality": metadata.get("quality"),
-                        "size": stat.st_size,
-                        "modified_at": stat.st_mtime,
-                        "artwork_url": generated.get("artwork_url") or metadata.get("artwork_url"),
-                        "overview": generated.get("overview"),
-                        "poster_path": generated.get("poster_path"),
-                        "backdrop_url": generated.get("backdrop_url"),
-                        "tmdb_id": generated.get("tmdb_id"),
-                        "media_type": generated.get("media_type"),
-                        "metadata_source": generated.get("metadata_source"),
-                        "metadata_updated_at": generated.get("metadata_updated_at"),
-                        "available": 1,
-                        "last_seen_at": now,
-                    }
-                )
 
             indexed_items += self.library.upsert_media_items(batch)
             scanned_sources += 1
@@ -154,6 +133,138 @@ class MediaService:
             "items_indexed": indexed_items,
             "limit": limit,
         }
+
+    def refresh_metadata(
+        self,
+        *,
+        paths: Optional[list[str]] = None,
+        source_id: Optional[int] = None,
+        limit: int = 5000,
+        force: bool = True,
+    ) -> dict[str, Any]:
+        if source_id is not None and self.library.get_source(source_id) is None:
+            raise FileNotFoundError(f"Media source does not exist: {source_id}")
+
+        requested_paths = self._normalize_refresh_paths(paths)[:limit] if paths is not None else None
+        candidates = self.library.list_media_items_for_refresh(
+            paths=requested_paths,
+            source_id=source_id,
+            limit=limit,
+        )
+        if requested_paths is not None:
+            candidate_by_path = {str(candidate["path"]): candidate for candidate in candidates}
+            missing_requested = [path for path in requested_paths if path not in candidate_by_path]
+            candidates = [candidate_by_path[path] for path in requested_paths if path in candidate_by_path]
+        else:
+            missing_requested = []
+
+        summary: dict[str, Any] = {
+            "items_refreshed": 0,
+            "items_missing": len(missing_requested),
+            "items_skipped": len(missing_requested),
+            "errors": [
+                {"path": path, "error": "Media item is not indexed."}
+                for path in missing_requested
+            ],
+            "limit": limit,
+        }
+        if not candidates:
+            return summary
+
+        now = utc_now()
+        refresh_items: list[dict[str, Any]] = []
+        unavailable_paths: list[str] = []
+
+        for candidate in candidates:
+            candidate_path = str(candidate["path"])
+            media_path = Path(candidate_path).expanduser()
+            try:
+                if not media_path.exists() or not media_path.is_file():
+                    unavailable_paths.append(candidate_path)
+                    summary["items_missing"] += 1
+                    summary["items_skipped"] += 1
+                    continue
+                if not self.is_video(media_path):
+                    summary["items_skipped"] += 1
+                    summary["errors"].append({"path": candidate_path, "error": "Path is not a video file."})
+                    continue
+                if (
+                    not force
+                    and candidate.get("metadata_updated_at")
+                    and candidate.get("overview")
+                    and candidate.get("poster_path")
+                ):
+                    summary["items_skipped"] += 1
+                    continue
+                refresh_items.append(
+                    self._build_media_item(
+                        media_path,
+                        source_id=candidate.get("source_id"),
+                        source_path=str(candidate.get("source_path") or media_path.parent),
+                        now=now,
+                    )
+                )
+            except OSError as exc:
+                unavailable_paths.append(candidate_path)
+                summary["items_missing"] += 1
+                summary["items_skipped"] += 1
+                summary["errors"].append({"path": candidate_path, "error": str(exc)})
+            except Exception as exc:
+                summary["items_skipped"] += 1
+                summary["errors"].append({"path": candidate_path, "error": str(exc) or exc.__class__.__name__})
+
+        if unavailable_paths:
+            self.library.mark_media_items_unavailable(unavailable_paths)
+        if refresh_items:
+            summary["items_refreshed"] = self.library.upsert_media_items(refresh_items)
+
+        return summary
+
+    def _build_media_item(
+        self,
+        media_path: Path,
+        *,
+        source_id: Optional[int],
+        source_path: str,
+        now: str,
+    ) -> dict[str, Any]:
+        stat = media_path.stat()
+        metadata = self.describe_media(media_path)
+        generated = self.metadata.enrich(media_path, metadata)
+        return {
+            "path": str(media_path),
+            "source_id": source_id,
+            "source_path": source_path,
+            "name": media_path.name,
+            "title": generated.get("title") or metadata.get("display_title") or media_path.stem,
+            "display_title": generated.get("display_title") or metadata.get("display_title"),
+            "year": generated.get("year") or metadata.get("year"),
+            "season": metadata.get("season"),
+            "episode": metadata.get("episode"),
+            "quality": metadata.get("quality"),
+            "size": stat.st_size,
+            "modified_at": stat.st_mtime,
+            "artwork_url": generated.get("artwork_url") or metadata.get("artwork_url"),
+            "overview": generated.get("overview"),
+            "poster_path": generated.get("poster_path"),
+            "backdrop_url": generated.get("backdrop_url"),
+            "tmdb_id": generated.get("tmdb_id"),
+            "media_type": generated.get("media_type"),
+            "metadata_source": generated.get("metadata_source"),
+            "metadata_updated_at": generated.get("metadata_updated_at"),
+            "available": 1,
+            "last_seen_at": now,
+        }
+
+    def _normalize_refresh_paths(self, paths: Optional[list[str]]) -> list[str]:
+        normalized: list[str] = []
+        seen = set()
+        for raw_path in paths or []:
+            path = str(Path(raw_path).expanduser().resolve())
+            if path not in seen:
+                normalized.append(path)
+                seen.add(path)
+        return normalized
 
     def _walk_video_files(self, root: Path):
         stack = [root]

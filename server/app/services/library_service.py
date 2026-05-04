@@ -26,6 +26,14 @@ class LibraryService:
             ).fetchall()
         return [self._with_source_status(dict(row)) for row in rows]
 
+    def get_source(self, source_id: int) -> Optional[dict[str, Any]]:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT id, name, path, created_at FROM sources WHERE id = ?",
+                (source_id,),
+            ).fetchone()
+        return self._with_source_status(dict(row)) if row else None
+
     def add_source(self, path: str, name: Optional[str] = None) -> dict[str, Any]:
         resolved = str(Path(path).expanduser().resolve())
         source_name = name or Path(resolved).name or resolved
@@ -94,6 +102,17 @@ class LibraryService:
             cursor = connection.execute(
                 "UPDATE media_items SET available = 0 WHERE source_id = ?",
                 (source_id,),
+            )
+        return int(cursor.rowcount or 0)
+
+    def mark_media_items_unavailable(self, paths: list[str]) -> int:
+        if not paths:
+            return 0
+
+        with self.database.connect() as connection:
+            cursor = connection.executemany(
+                "UPDATE media_items SET available = 0 WHERE path = ?",
+                ((path,) for path in paths),
             )
         return int(cursor.rowcount or 0)
 
@@ -284,6 +303,61 @@ class LibraryService:
                 LEFT JOIN favorites ON favorites.path = media_items.path
                 {where_sql}
                 ORDER BY {sort_sql}
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_media_items_for_refresh(
+        self,
+        *,
+        paths: Optional[list[str]] = None,
+        source_id: Optional[int] = None,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        if paths is not None:
+            if not paths:
+                return []
+
+            rows: list[dict[str, Any]] = []
+            with self.database.connect() as connection:
+                for index in range(0, len(paths), 900):
+                    chunk = paths[index : index + 900]
+                    placeholders = ", ".join("?" for _ in chunk)
+                    clauses = [f"path IN ({placeholders})"]
+                    params: list[Any] = list(chunk)
+                    if source_id is not None:
+                        clauses.append("source_id = ?")
+                        params.append(source_id)
+                    rows.extend(
+                        dict(row)
+                        for row in connection.execute(
+                            f"""
+                            SELECT *
+                            FROM media_items
+                            WHERE {' AND '.join(clauses)}
+                            """,
+                            params,
+                        ).fetchall()
+                    )
+            return rows[:limit]
+
+        clauses = []
+        params: list[Any] = []
+        if source_id is not None:
+            clauses.append("source_id = ?")
+            params.append(source_id)
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM media_items
+                {where_sql}
+                ORDER BY LOWER(title) ASC, name ASC
                 LIMIT ?
                 """,
                 params,

@@ -133,6 +133,26 @@ class LibraryScanRequest(BaseModel):
     wait: bool = False
 
 
+class LibraryMetadataRefreshRequest(BaseModel):
+    paths: Optional[list[str]] = None
+    source_id: Optional[int] = None
+    limit: int = Field(default=5000, ge=1, le=50000)
+    force: bool = True
+
+
+class LibraryMetadataRefreshError(BaseModel):
+    path: Optional[str] = None
+    error: str
+
+
+class LibraryMetadataRefreshResponse(BaseModel):
+    items_refreshed: int
+    items_missing: int
+    items_skipped: int
+    errors: list[LibraryMetadataRefreshError] = Field(default_factory=list)
+    limit: int
+
+
 class LibraryScanJob(BaseModel):
     id: int
     status: str = Field(pattern="^(running|completed|failed)$")

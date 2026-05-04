@@ -4,7 +4,13 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
-from app.models.schemas import LibraryScanJob, LibraryScanJobsResponse, LibraryScanRequest
+from app.models.schemas import (
+    LibraryMetadataRefreshRequest,
+    LibraryMetadataRefreshResponse,
+    LibraryScanJob,
+    LibraryScanJobsResponse,
+    LibraryScanRequest,
+)
 from app.state import library_service, media_service
 
 
@@ -58,6 +64,20 @@ def scan_library(
         job = library_service.create_scan_job(source_id=payload.source_id, limit=payload.limit)
         background_tasks.add_task(_run_scan_job, int(job["id"]), payload.source_id, payload.limit)
         return job
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/library/metadata/refresh", response_model=LibraryMetadataRefreshResponse)
+def refresh_library_metadata(payload: Optional[LibraryMetadataRefreshRequest] = None) -> dict:
+    payload = payload or LibraryMetadataRefreshRequest()
+    try:
+        return media_service.refresh_metadata(
+            paths=payload.paths,
+            source_id=payload.source_id,
+            limit=payload.limit,
+            force=payload.force,
+        )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

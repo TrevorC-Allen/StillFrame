@@ -24,6 +24,52 @@ def disable_tmdb(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(metadata_module, "TMDB_BEARER_TOKEN", None)
 
 
+def seed_indexed_media_item(
+    library: LibraryService,
+    media_path: Path,
+    source: dict,
+    *,
+    title: str = "Stale Title",
+) -> None:
+    stat = media_path.stat()
+    library.upsert_media_items(
+        [
+            {
+                "path": str(media_path.resolve()),
+                "source_id": int(source["id"]),
+                "source_path": source["path"],
+                "name": media_path.name,
+                "title": title,
+                "display_title": title,
+                "year": None,
+                "season": None,
+                "episode": None,
+                "quality": None,
+                "size": stat.st_size,
+                "modified_at": stat.st_mtime,
+                "artwork_url": None,
+                "overview": "stale overview",
+                "poster_path": None,
+                "backdrop_url": None,
+                "tmdb_id": None,
+                "media_type": None,
+                "metadata_source": "stale",
+                "metadata_updated_at": "2025-01-01T00:00:00+00:00",
+                "available": 1,
+                "last_seen_at": "2025-01-01T00:00:00+00:00",
+            }
+        ]
+    )
+
+
+def indexed_item_by_path(library: LibraryService, media_path: Path) -> dict:
+    return next(
+        item
+        for item in library.list_media_items(limit=100, include_unavailable=True)
+        if item["path"] == str(media_path.resolve())
+    )
+
+
 def test_database_sources_history_and_favorites(tmp_path: Path) -> None:
     library, _ = make_services(tmp_path)
     movie = tmp_path / "Movie.mkv"
@@ -267,6 +313,110 @@ def test_scan_jobs_store_completion_summary(tmp_path: Path) -> None:
     assert completed["sources_skipped"] == 0
     assert completed["completed_at"] is not None
     assert jobs[0]["id"] == job["id"]
+
+
+def test_refresh_metadata_rebuilds_single_indexed_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    movie = tmp_path / "Better.Title.2024.1080p.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+    seed_indexed_media_item(library, movie, source, title="Old Local Title")
+
+    summary = media.refresh_metadata(paths=[str(movie)])
+    item = indexed_item_by_path(library, movie)
+
+    assert summary["items_refreshed"] == 1
+    assert summary["items_missing"] == 0
+    assert summary["items_skipped"] == 0
+    assert summary["errors"] == []
+    assert item["title"] == "Better Title"
+    assert item["display_title"] == "Better Title"
+    assert item["year"] == 2024
+    assert item["quality"] == "1080P"
+    assert "电影《Better Title》" in item["overview"]
+    assert item["metadata_source"] == "local"
+    assert item["artwork_url"].startswith("/media/artwork?path=")
+
+
+def test_refresh_metadata_filters_by_source_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    source_root = tmp_path / "SourceA"
+    other_root = tmp_path / "SourceB"
+    source_root.mkdir()
+    other_root.mkdir()
+    source = library.add_source(str(source_root))
+    other_source = library.add_source(str(other_root))
+    movie = source_root / "Source.Movie.2025.mkv"
+    other_movie = other_root / "Other.Movie.2025.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+    other_movie.write_text("fake video", encoding="utf-8")
+    seed_indexed_media_item(library, movie, source, title="Stale Source")
+    seed_indexed_media_item(library, other_movie, other_source, title="Stale Other")
+
+    summary = media.refresh_metadata(source_id=source["id"])
+    item = indexed_item_by_path(library, movie)
+    other_item = indexed_item_by_path(library, other_movie)
+
+    assert summary["items_refreshed"] == 1
+    assert summary["items_missing"] == 0
+    assert summary["items_skipped"] == 0
+    assert item["title"] == "Source Movie"
+    assert other_item["title"] == "Stale Other"
+
+
+def test_refresh_metadata_marks_missing_offline_items_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    source_root = tmp_path / "MountedNAS"
+    source_root.mkdir()
+    source = library.add_source(str(source_root))
+    movie = source_root / "Offline.Movie.2025.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+    seed_indexed_media_item(library, movie, source, title="Stale Offline")
+    movie.unlink()
+    source_root.rmdir()
+
+    summary = media.refresh_metadata(source_id=source["id"])
+    item = indexed_item_by_path(library, movie)
+
+    assert summary["items_refreshed"] == 0
+    assert summary["items_missing"] == 1
+    assert summary["items_skipped"] == 1
+    assert summary["errors"] == []
+    assert item["available"] == 0
+
+
+def test_refresh_metadata_respects_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    source_root = tmp_path / "Limited"
+    source_root.mkdir()
+    source = library.add_source(str(source_root))
+    alpha = source_root / "Alpha.2025.mkv"
+    beta = source_root / "Beta.2025.mkv"
+    alpha.write_text("fake video", encoding="utf-8")
+    beta.write_text("fake video", encoding="utf-8")
+    seed_indexed_media_item(library, alpha, source, title="Stale Alpha")
+    seed_indexed_media_item(library, beta, source, title="Stale Beta")
+
+    summary = media.refresh_metadata(source_id=source["id"], limit=1)
+    alpha_item = indexed_item_by_path(library, alpha)
+    beta_item = indexed_item_by_path(library, beta)
+
+    assert summary["items_refreshed"] == 1
+    assert summary["items_missing"] == 0
+    assert summary["items_skipped"] == 0
+    assert summary["limit"] == 1
+    assert alpha_item["title"] == "Alpha"
+    assert beta_item["title"] == "Stale Beta"
 
 
 def test_database_initialize_adds_scan_jobs_to_existing_database(tmp_path: Path) -> None:
