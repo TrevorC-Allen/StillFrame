@@ -13,6 +13,7 @@ build/
 .build/
 release/
 DerivedData/
+clients/apple/StillFrameApple/StillFrameApple.xcodeproj/
 coverage/
 logs/*.log
 server/stillframe.db

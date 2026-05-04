@@ -10,13 +10,34 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
 targets:
+  StillFrameKit iOS:
+    type: framework
+    platform: iOS
+    sources:
+      - Sources/StillFrameKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.kit.ios
+        PRODUCT_NAME: StillFrameKit
+        GENERATE_INFOPLIST_FILE: YES
+  StillFrameKit macOS:
+    type: framework
+    platform: macOS
+    sources:
+      - Sources/StillFrameKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.kit.macos
+        PRODUCT_NAME: StillFrameKit
+        GENERATE_INFOPLIST_FILE: YES
   StillFrame iOS:
     type: application
     platform: iOS
     sources:
-      - Sources/StillFrameKit
       - Sources/StillFrameApple
       - Resources/Assets.xcassets
+    dependencies:
+      - target: StillFrameKit iOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.ios
@@ -36,9 +57,10 @@ targets:
     type: application
     platform: macOS
     sources:
-      - Sources/StillFrameKit
       - Sources/StillFrameApple
       - Resources/Assets.xcassets
+    dependencies:
+      - target: StillFrameKit macOS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.macos.native
