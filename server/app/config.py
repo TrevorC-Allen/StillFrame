@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SERVER_DIR = ROOT_DIR / "server"
-MEDIA_CACHE_DIR = ROOT_DIR / "media_cache"
+MEDIA_CACHE_DIR = Path(os.environ.get("STILLFRAME_MEDIA_CACHE_DIR", ROOT_DIR / "media_cache"))
 
 DB_PATH = Path(os.environ.get("STILLFRAME_DB_PATH", SERVER_DIR / "stillframe.db"))
 HOST = os.environ.get("STILLFRAME_HOST", "127.0.0.1")

@@ -6,7 +6,8 @@ import { spawn } from "node:child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, "../../..");
+const APP_ROOT = app.isPackaged ? app.getAppPath() : path.resolve(__dirname, "../..");
+const PROJECT_ROOT = app.isPackaged ? path.join(process.resourcesPath, "StillFrame") : path.resolve(APP_ROOT, "..");
 const SERVER_DIR = path.join(PROJECT_ROOT, "server");
 const SERVER_URL = "http://127.0.0.1:8765";
 
@@ -48,6 +49,21 @@ function createMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+function packagedStorageEnv() {
+  if (!app.isPackaged) {
+    return {};
+  }
+
+  const userDataDir = app.getPath("userData");
+  const mediaCacheDir = process.env.STILLFRAME_MEDIA_CACHE_DIR || path.join(userDataDir, "media_cache");
+  fs.mkdirSync(mediaCacheDir, { recursive: true });
+
+  return {
+    STILLFRAME_DB_PATH: process.env.STILLFRAME_DB_PATH || path.join(userDataDir, "stillframe.db"),
+    STILLFRAME_MEDIA_CACHE_DIR: mediaCacheDir
+  };
+}
+
 function startBackend() {
   if (serverProcess) {
     return;
@@ -56,6 +72,7 @@ function startBackend() {
   const env = {
     ...process.env,
     PYTHONPATH: [PROJECT_ROOT, SERVER_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+    ...packagedStorageEnv(),
     STILLFRAME_HOST: "127.0.0.1",
     STILLFRAME_PORT: "8765"
   };
@@ -122,7 +139,7 @@ async function createWindow() {
   if (process.env.NODE_ENV === "development") {
     await mainWindow.loadURL("http://127.0.0.1:5173");
   } else {
-    await mainWindow.loadFile(path.join(PROJECT_ROOT, "app", "dist", "index.html"));
+    await mainWindow.loadFile(path.join(APP_ROOT, "dist", "index.html"));
   }
 }
 

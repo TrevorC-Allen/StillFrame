@@ -7,17 +7,65 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && NODE_ENV=development electron .\"",
+    "dev:macos": "npm run dev",
     "build": "vite build",
-    "start": "NODE_ENV=production electron ."
+    "start": "NODE_ENV=production electron .",
+    "pack:mac": "npm run build && electron-builder --mac --dir",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^8.2.2",
-    "electron": "^41.5.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^8.0.10",
     "wait-on": "^7.2.0"
+  },
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.stillframe.desktop",
+    "productName": "StillFrame",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../server",
+        "to": "StillFrame/server",
+        "filter": [
+          "**/*",
+          "!**/.venv/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!stillframe.db"
+        ]
+      },
+      {
+        "from": "../player",
+        "to": "StillFrame/player",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      }
+    ]
   }
 }

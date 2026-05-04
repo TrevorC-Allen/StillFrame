@@ -2,7 +2,7 @@
 
 ## Runtime Shape
 
-StillFrame has three local layers:
+StillFrame has three local layers on the Mac host:
 
 - Electron main process starts and stops the FastAPI backend, owns the native folder picker, and hosts the desktop window.
 - React renderer shows sources, files, history, favorites, player state, and settings. It only talks to FastAPI.
@@ -11,6 +11,9 @@ StillFrame has three local layers:
 - The library index is a local SQLite projection of connected media sources. It is rebuilt by scan jobs and is safe to regenerate.
 - Library scans run as local background jobs by default. Blocking scans are still available through `synchronous=true` or `wait=true` for tests and simple scripts.
 - Metadata enrichment is local-first. Scans generate poster SVGs and file-name-based summaries without network access; TMDb lookup is used only when credentials are provided through environment variables.
+- Packaged macOS builds store SQLite and generated media cache files in the app user data directory, keeping the app bundle read-only.
+
+Apple mobile clients are separate SwiftUI apps. They connect to the Mac host over the local network, use `AVPlayer` for Apple-compatible previews, and call `/play` when the user wants the Mac host to open the original file in mpv.
 
 ## Playback
 

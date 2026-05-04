@@ -1,0 +1,44 @@
+name: StillFrameApple
+options:
+  bundleIdPrefix: app.stillframe
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+targets:
+  StillFrame iOS:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/StillFrameKit
+      - Sources/StillFrameApple
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.ios
+        PRODUCT_NAME: StillFrame
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+  StillFrame macOS:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/StillFrameKit
+      - Sources/StillFrameApple
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.stillframe.macos.native
+        PRODUCT_NAME: StillFrame
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication

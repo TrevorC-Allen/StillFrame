@@ -1,6 +1,6 @@
 # StillFrame
 
-StillFrame is a local-first desktop media center for macOS. It uses Electron and React for the library UI, FastAPI for the local backend, SQLite for local state, and `mpv` for high-quality playback in an independent window.
+StillFrame is a local-first media center for Apple devices. The Mac desktop host uses Electron and React for the library UI, FastAPI for the local backend, SQLite for local state, and `mpv` for high-quality playback in an independent window. iPadOS and iOS use a native SwiftUI client that connects to the Mac host over a trusted local network.
 
 ## Current Scope
 
@@ -12,6 +12,8 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 - Local subtitles matched from the media folder.
 - Source availability checks for disconnected NAS paths.
 - Browser preview resumes unfinished videos from saved progress.
+- macOS desktop packaging support with backend resources bundled beside the Electron app and runtime data stored in the app user data directory.
+- Native SwiftUI client source for macOS, iPadOS, and iOS under `clients/apple/StillFrameApple`.
 - No online scraping, online subtitles, cloud sync, media-server login, or default network calls beyond `127.0.0.1`.
 
 ## Setup
@@ -66,6 +68,22 @@ npm run dev
 ```
 
 The Electron shell includes an indexed Library view with segmented media filters, year/quality/source facets, background scan job status, poster/overview preview metadata, offline status, and the same play/favorite actions used by Recent, Favorites, and the file browser.
+
+Packaged macOS app:
+
+```bash
+cd path/to/StillFrame
+./scripts/package_macos.sh
+```
+
+Native iPadOS/iOS client:
+
+```bash
+cd path/to/StillFrame
+./scripts/run_server_lan.sh
+```
+
+Then open `clients/apple/StillFrameApple` in Xcode and run the SwiftUI app on iPhone or iPad. Set the app server URL to `http://<mac-lan-ip>:8765`. The native client can browse the indexed library, show generated posters and descriptions, preview Apple-supported formats with AVPlayer, toggle favorites, start scans, refresh metadata, and ask the Mac host to launch full-quality mpv playback.
 
 ## Web MVP Shortcuts
 

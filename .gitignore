@@ -10,6 +10,9 @@ __pycache__/
 node_modules/
 dist/
 build/
+.build/
+release/
+DerivedData/
 coverage/
 logs/*.log
 server/stillframe.db
