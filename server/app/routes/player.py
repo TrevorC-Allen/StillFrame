@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
+from app.config import VIDEO_EXTENSIONS
 from app.models.schemas import PlayRequest, PlayerCommand, PlayerState
 from app.services.library_service import title_from_path
 from app.state import library_service, mpv_controller, subtitle_manager
@@ -14,16 +17,19 @@ router = APIRouter(tags=["player"])
 
 @router.post("/play", response_model=PlayerState)
 def play(payload: PlayRequest) -> dict:
-    start_position = _start_position(payload)
     try:
-        subtitles = subtitle_manager.match_subtitles(payload.path)
+        media_path = _resolve_play_path(payload.path)
+        start_position = _start_position(payload, str(media_path))
+        subtitles = subtitle_manager.match_subtitles(str(media_path))
         state = mpv_controller.open(
-            payload.path,
+            str(media_path),
             start_position=start_position,
             subtitles=[subtitle["path"] for subtitle in subtitles],
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except MPVUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -83,13 +89,27 @@ def subtitle_webvtt(
     )
 
 
-def _start_position(payload: PlayRequest) -> float:
+def _resolve_play_path(raw_path: str) -> Path:
+    try:
+        media_path = Path(raw_path).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ValueError(f"Invalid media path: {exc}") from exc
+    if not media_path.exists():
+        raise FileNotFoundError(f"Media file does not exist: {media_path}")
+    if not media_path.is_file():
+        raise ValueError(f"Media path is not a file: {media_path}")
+    if media_path.suffix.lower() not in VIDEO_EXTENSIONS:
+        raise ValueError(f"Path is not a supported video file: {media_path}")
+    return media_path
+
+
+def _start_position(payload: PlayRequest, media_path: str) -> float:
     if payload.start_position is not None:
         return max(float(payload.start_position), 0)
     if not payload.resume:
         return 0
 
-    playback = library_service.get_playback(payload.path)
+    playback = library_service.get_playback(media_path)
     if not playback:
         return 0
     duration = float(playback["duration"] or 0)

@@ -9,6 +9,7 @@ from app.database import Database
 from app.services import metadata_service as metadata_module
 from app.services.library_service import LibraryService
 from app.services.media_service import MediaService
+from player.mpv_controller import MPVController, MPVUnavailableError
 from player.subtitle_manager import SubtitleManager
 
 
@@ -500,3 +501,37 @@ def test_ass_to_webvtt_conversion(tmp_path: Path) -> None:
     assert "WEBVTT" in webvtt
     assert "00:00:01.000 --> 00:00:02.500" in webvtt
     assert "你好\n世界" in webvtt
+
+
+def test_mpv_controller_rejects_unplayable_paths_before_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    controller = MPVController()
+    notes = tmp_path / "notes.txt"
+    media = tmp_path / "Playable.mp4"
+    notes.write_text("not a video", encoding="utf-8")
+    media.write_bytes(b"fake video")
+
+    with pytest.raises(FileNotFoundError, match="Media file does not exist"):
+        controller.open(str(tmp_path / "missing.mp4"))
+    with pytest.raises(ValueError, match="not a file"):
+        controller.open(str(tmp_path))
+    with pytest.raises(ValueError, match="supported video file"):
+        controller.open(str(notes))
+
+    monkeypatch.setattr("player.mpv_controller.shutil.which", lambda name: None)
+    with pytest.raises(MPVUnavailableError, match="mpv is not installed"):
+        controller.open(str(media))
+
+
+def test_mpv_controller_commands_report_no_current_media() -> None:
+    controller = MPVController()
+
+    with pytest.raises(OSError, match="No media is currently open"):
+        controller.command("pause")
+    with pytest.raises(ValueError, match="Unsupported player command"):
+        controller.command("dance")
+
+    state = controller.command("stop")
+    assert state["running"] is False
