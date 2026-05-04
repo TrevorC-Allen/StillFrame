@@ -256,6 +256,29 @@ class MediaService:
             "last_seen_at": now,
         }
 
+    def _browse_video_metadata(self, media_path: Path) -> dict[str, Any]:
+        parsed = self.describe_media(media_path)
+        indexed = self.library.list_media_items_for_refresh(paths=[str(media_path.resolve())], limit=1)
+        if indexed:
+            indexed_item = indexed[0]
+            return {
+                **parsed,
+                "title": indexed_item.get("title") or parsed.get("display_title"),
+                "display_title": indexed_item.get("display_title") or indexed_item.get("title") or parsed.get("display_title"),
+                "year": indexed_item.get("year") or parsed.get("year"),
+                "season": indexed_item.get("season") or parsed.get("season"),
+                "episode": indexed_item.get("episode") or parsed.get("episode"),
+                "quality": indexed_item.get("quality") or parsed.get("quality"),
+                "artwork_url": indexed_item.get("artwork_url") or parsed.get("artwork_url"),
+                "overview": indexed_item.get("overview"),
+                "poster_path": indexed_item.get("poster_path"),
+                "backdrop_url": indexed_item.get("backdrop_url"),
+                "media_type": indexed_item.get("media_type"),
+                "metadata_source": indexed_item.get("metadata_source"),
+                "metadata_updated_at": indexed_item.get("metadata_updated_at"),
+            }
+        return self.metadata.local_metadata(media_path, parsed)
+
     def _normalize_refresh_paths(self, paths: Optional[list[str]]) -> list[str]:
         normalized: list[str] = []
         seen = set()
@@ -329,7 +352,7 @@ class MediaService:
                 continue
 
             child_path = str(child)
-            metadata = self.describe_media(child) if is_video else {}
+            metadata = self._browse_video_metadata(child) if is_video else {}
             playback = self.library.get_playback(child_path) if is_video else None
             duration = float(playback["duration"]) if playback and playback["duration"] else 0
             position = float(playback["position"]) if playback and playback["position"] else 0
@@ -341,6 +364,7 @@ class MediaService:
                 {
                     "name": child.name,
                     "display_title": metadata.get("display_title"),
+                    "title": metadata.get("title"),
                     "path": child_path,
                     "kind": "directory" if is_directory else "video",
                     "size": None if is_directory else stat.st_size,
@@ -355,6 +379,12 @@ class MediaService:
                     "episode": metadata.get("episode"),
                     "quality": metadata.get("quality"),
                     "artwork_url": metadata.get("artwork_url"),
+                    "overview": metadata.get("overview"),
+                    "poster_path": metadata.get("poster_path"),
+                    "backdrop_url": metadata.get("backdrop_url"),
+                    "media_type": metadata.get("media_type"),
+                    "metadata_source": metadata.get("metadata_source"),
+                    "metadata_updated_at": metadata.get("metadata_updated_at"),
                 }
             )
 

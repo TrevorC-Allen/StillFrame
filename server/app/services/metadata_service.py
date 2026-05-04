@@ -155,6 +155,10 @@ class MetadataService:
             metadata.update(tmdb)
         return metadata
 
+    def local_metadata(self, media_path: Path, parsed: dict[str, Any]) -> dict[str, Any]:
+        cleaned = self._clean_parsed_metadata(media_path, parsed)
+        return self._local_metadata(media_path, cleaned)
+
     def _clean_parsed_metadata(self, media_path: Path, parsed: dict[str, Any]) -> dict[str, Any]:
         candidates = self._title_candidates(media_path, parsed)
         best = max(candidates, key=self._candidate_score) if candidates else None

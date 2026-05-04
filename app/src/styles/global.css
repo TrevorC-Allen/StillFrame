@@ -844,7 +844,7 @@ h2 {
   grid-template-columns: minmax(0, 1fr) 120px 88px 36px;
   align-items: center;
   gap: 12px;
-  min-height: 46px;
+  min-height: 54px;
   padding: 0 8px 0 10px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -868,9 +868,65 @@ h2 {
   padding: 0;
 }
 
+.file-main.rich {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+}
+
 .file-main svg {
   flex: 0 0 auto;
   color: #7fc7c7;
+}
+
+.file-thumb {
+  display: grid;
+  width: 38px;
+  height: 50px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #303746;
+  border-radius: 7px;
+  background: #10141b;
+  color: #7fc7c7;
+}
+
+.file-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.file-main .file-copy,
+.file-main .file-copy small,
+.file-main .file-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-copy strong {
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.file-copy small {
+  color: #8d96a8;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.file-overview {
+  color: #aab3c2;
 }
 
 .muted-text {

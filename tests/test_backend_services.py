@@ -116,8 +116,11 @@ def test_sources_report_disconnected_paths(tmp_path: Path) -> None:
 
 def test_browse_filters_to_directories_and_videos(tmp_path: Path) -> None:
     library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
     movie = tmp_path / "Arrival.2016.2160p.BluRay.HEVC.mkv"
+    poster = tmp_path / "Arrival.2016.2160p.BluRay.HEVC-poster.jpg"
     movie.write_text("fake video", encoding="utf-8")
+    poster.write_bytes(b"poster")
     (tmp_path / "Notes.txt").write_text("not media", encoding="utf-8")
     (tmp_path / "Season 1").mkdir()
     library.save_playback(str(movie), duration=100, position=50)
@@ -139,6 +142,36 @@ def test_browse_filters_to_directories_and_videos(tmp_path: Path) -> None:
     assert movie_item["display_title"] == "Arrival"
     assert movie_item["year"] == 2016
     assert movie_item["quality"] == "2160P"
+    assert movie_item["media_type"] == "movie"
+    assert movie_item["metadata_source"] == "local"
+    assert "电影《Arrival》" in movie_item["overview"]
+    assert movie_item["poster_path"] == str(poster)
+    assert movie_item["artwork_url"] == f"/media/artwork?path={poster}"
+
+
+def test_browse_prefers_indexed_rich_metadata(tmp_path: Path) -> None:
+    library, media = make_services(tmp_path)
+    movie = tmp_path / "Arrival.2016.2160p.BluRay.HEVC.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+    seed_indexed_media_item(
+        library,
+        movie,
+        source,
+        title="Indexed Arrival",
+        year=2016,
+        quality="REMUX",
+        media_type="movie",
+    )
+
+    result = media.browse(str(tmp_path))
+    movie_item = next(item for item in result["items"] if item["name"] == "Arrival.2016.2160p.BluRay.HEVC.mkv")
+
+    assert movie_item["display_title"] == "Indexed Arrival"
+    assert movie_item["year"] == 2016
+    assert movie_item["quality"] == "REMUX"
+    assert movie_item["overview"] == "stale overview"
+    assert movie_item["metadata_source"] == "stale"
 
 
 def test_local_artwork_discovery(tmp_path: Path) -> None:

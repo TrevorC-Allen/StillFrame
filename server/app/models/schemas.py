@@ -60,6 +60,7 @@ class MediaSource(BaseModel):
 
 class BrowseItem(BaseModel):
     name: str
+    title: Optional[str] = None
     display_title: Optional[str] = None
     path: str
     kind: str = Field(pattern="^(directory|video|file)$")
@@ -75,6 +76,12 @@ class BrowseItem(BaseModel):
     episode: Optional[int] = None
     quality: Optional[str] = None
     artwork_url: Optional[str] = None
+    overview: Optional[str] = None
+    poster_path: Optional[str] = None
+    backdrop_url: Optional[str] = None
+    media_type: Optional[str] = None
+    metadata_source: Optional[str] = None
+    metadata_updated_at: Optional[str] = None
 
 
 class BrowseResponse(BaseModel):

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, Folder, Play, Plus, Star } from "lucide-react";
+import { ChevronLeft, Film, Folder, Play, Plus, Star } from "lucide-react";
+
+import { mediaUrl } from "../api/client.js";
 
 export function FileBrowser({
   data,
@@ -83,13 +85,21 @@ export function FileBrowser({
         {visibleItems.map((item) => (
           <div className="file-row" key={item.path}>
             <button
-              className="file-main"
+              className={item.kind === "video" ? "file-main rich" : "file-main"}
               onClick={() =>
                 item.kind === "directory" ? onOpenDirectory(item.path) : onPlay(item.path)
               }
             >
-              {item.kind === "directory" ? <Folder size={20} /> : <Play size={20} />}
-              <span>{item.name}</span>
+              {item.kind === "directory" ? <Folder size={20} /> : <FilePoster item={item} />}
+              {item.kind === "directory" ? (
+                <span>{item.name}</span>
+              ) : (
+                <span className="file-copy">
+                  <strong>{displayTitle(item)}</strong>
+                  <small>{fileSubtitle(item)}</small>
+                  {item.overview && <small className="file-overview">{item.overview}</small>}
+                </span>
+              )}
             </button>
 
             {item.kind === "video" && (
@@ -118,7 +128,7 @@ function filterAndSortItems(items, filter, sort) {
   const query = filter.trim().toLowerCase();
   const filtered = query
     ? items.filter((item) =>
-        `${item.name || ""} ${item.display_title || ""} ${item.quality || ""}`
+        `${item.name || ""} ${item.display_title || ""} ${item.title || ""} ${item.year || ""} ${item.quality || ""} ${item.media_type || ""} ${item.overview || ""}`
           .toLowerCase()
           .includes(query)
       )
@@ -137,6 +147,36 @@ function filterAndSortItems(items, filter, sort) {
     }
     return folderOrder || a.name.localeCompare(b.name);
   });
+}
+
+function FilePoster({ item }) {
+  const src = mediaUrl(item.artwork_url);
+  return (
+    <span className="file-thumb">
+      {src ? <img src={src} alt="" /> : <Film size={20} />}
+    </span>
+  );
+}
+
+function displayTitle(item) {
+  return item.display_title || item.title || item.name || "Untitled";
+}
+
+function fileSubtitle(item) {
+  const parts = [];
+  if (item.media_type) {
+    parts.push(item.media_type === "tv" ? "TV" : item.media_type === "movie" ? "Movie" : item.media_type);
+  }
+  if (item.year) {
+    parts.push(item.year);
+  }
+  if (item.season && item.episode) {
+    parts.push(`S${String(item.season).padStart(2, "0")}E${String(item.episode).padStart(2, "0")}`);
+  }
+  if (item.quality) {
+    parts.push(item.quality);
+  }
+  return parts.join(" / ") || item.name;
 }
 
 function Progress({ value }) {
