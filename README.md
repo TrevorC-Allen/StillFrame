@@ -82,6 +82,7 @@ The Electron shell includes an indexed Library view with background scan job sta
 The local API listens on `http://127.0.0.1:8765`.
 
 - `GET /health`
+- `GET /diagnostics/playback` returns platform, mpv/ffmpeg presence, paths, versions, playback issues, and install hints. The current UI falls back to `/health` until this endpoint is available.
 - `GET /sources`
 - `POST /sources`
 - `GET /library`

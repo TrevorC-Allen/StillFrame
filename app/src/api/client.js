@@ -28,6 +28,15 @@ async function request(path, options = {}) {
 
 export const api = {
   health: () => request("/health"),
+  playbackDiagnostics: async () => {
+    try {
+      const diagnostics = await request("/diagnostics/playback");
+      return normalizePlaybackDiagnostics(diagnostics, "diagnostics");
+    } catch {
+      const health = await request("/health");
+      return normalizePlaybackDiagnostics(health, "health");
+    }
+  },
   sources: () => request("/sources"),
   addSource: (path, name) => request("/sources", {
     method: "POST",
@@ -94,4 +103,113 @@ export function mediaUrl(path) {
     return path;
   }
   return `${SERVER_URL}${path}`;
+}
+
+function normalizePlaybackDiagnostics(data = {}, source = "diagnostics") {
+  const mpv = normalizeDiagnosticTool(data.mpv, {
+    present: data.mpv_present ?? data.mpv_available,
+    path: data.mpv_path,
+    version: data.mpv_version
+  });
+  const ffmpeg = normalizeDiagnosticTool(data.ffmpeg, {
+    present: data.ffmpeg_present ?? data.ffmpeg_available,
+    path: data.ffmpeg_path,
+    version: data.ffmpeg_version
+  });
+  const fullPlaybackAvailable = Boolean(data.full_playback_available ?? (mpv.present && ffmpeg.present));
+  const normalized = {
+    ...data,
+    platform: data.platform || navigator.platform || "Unknown",
+    mpv,
+    ffmpeg,
+    full_playback_available: fullPlaybackAvailable,
+    install_hint: data.install_hint || null,
+    diagnostics_source: source,
+    mpv_available: mpv.present,
+    ffmpeg_available: ffmpeg.present,
+    mpv_path: mpv.path,
+    ffmpeg_path: ffmpeg.path,
+    mpv_version: mpv.version,
+    ffmpeg_version: ffmpeg.version
+  };
+  normalized.issues = normalizeDiagnosticIssues(data.issues, normalized);
+  return normalized;
+}
+
+function normalizeDiagnosticTool(tool, legacy = {}) {
+  const raw = tool && typeof tool === "object" ? tool : {};
+  const path = raw.path ?? legacy.path ?? (typeof tool === "string" ? tool : null);
+  const version = raw.version ?? legacy.version ?? null;
+  const presentValue = raw.present ?? raw.available ?? raw.ok ?? legacy.present;
+  const present = typeof presentValue === "boolean"
+    ? presentValue
+    : presentValue == null
+      ? Boolean(path || version)
+      : Boolean(presentValue);
+  return {
+    present,
+    path: path || null,
+    version: version || null
+  };
+}
+
+function normalizeDiagnosticIssues(issues, diagnostics) {
+  const list = Array.isArray(issues) ? issues : issues ? [issues] : [];
+  const normalized = list
+    .map((issue) => normalizeDiagnosticIssue(issue))
+    .filter((issue) => issue.message || issue.action);
+
+  if (!diagnostics.mpv.present) {
+    normalized.push({
+      code: "missing_mpv",
+      severity: "warning",
+      message: "mpv is missing.",
+      action: diagnostics.install_hint || "Install mpv for native playback."
+    });
+  }
+
+  if (!diagnostics.ffmpeg.present) {
+    normalized.push({
+      code: "missing_ffmpeg",
+      severity: "warning",
+      message: "ffmpeg is missing.",
+      action: diagnostics.install_hint || "Install ffmpeg for codec inspection and conversion support."
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeDiagnosticIssue(issue) {
+  if (!issue) {
+    return { message: "", action: "", severity: "warning", code: "" };
+  }
+  if (typeof issue === "string") {
+    return { message: issue, action: "", severity: "warning", code: "" };
+  }
+  const action = issue.action ?? issue.fix ?? issue.hint ?? issue.install_hint ?? issue.resolution ?? "";
+  const message = issue.message ?? issue.detail ?? issue.description ?? issue.title ?? issue.code ?? "";
+  return {
+    code: issue.code || "",
+    severity: issue.severity || issue.level || "warning",
+    message: String(message),
+    action: stringifyDiagnosticValue(action)
+  };
+}
+
+function stringifyDiagnosticValue(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(stringifyDiagnosticValue).filter(Boolean).join("; ");
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }

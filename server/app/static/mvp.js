@@ -22,6 +22,15 @@ const api = {
   }),
   chooseFolder: () => api.request("/dialog/folder", { method: "POST" }),
   health: () => api.request("/health"),
+  playbackDiagnostics: async () => {
+    try {
+      const diagnostics = await api.request("/diagnostics/playback");
+      return normalizePlaybackDiagnostics(diagnostics, "diagnostics");
+    } catch {
+      const health = await api.health();
+      return normalizePlaybackDiagnostics(health, "health");
+    }
+  },
   sources: () => api.request("/sources"),
   addSource: (path) => api.request("/sources", {
     method: "POST",
@@ -108,6 +117,18 @@ function icon(name, className = "") {
 
 const els = {
   health: document.querySelector("#health"),
+  healthStatus: document.querySelector("#health-status"),
+  healthSummary: document.querySelector("#health-summary"),
+  healthPlatform: document.querySelector("#health-platform"),
+  healthSource: document.querySelector("#health-source"),
+  healthMpv: document.querySelector("#health-mpv"),
+  healthMpvVersion: document.querySelector("#health-mpv-version"),
+  healthMpvPath: document.querySelector("#health-mpv-path"),
+  healthFfmpeg: document.querySelector("#health-ffmpeg"),
+  healthFfmpegVersion: document.querySelector("#health-ffmpeg-version"),
+  healthFfmpegPath: document.querySelector("#health-ffmpeg-path"),
+  healthIssues: document.querySelector("#health-issues"),
+  healthHint: document.querySelector("#health-hint"),
   title: document.querySelector("#title"),
   error: document.querySelector("#error"),
   sourceForm: document.querySelector("#source-form"),
@@ -424,7 +445,7 @@ function bindEvents() {
 async function refresh() {
   await run(async () => {
     const [health, sources, library, history, favorites] = await Promise.all([
-      api.health(),
+      api.playbackDiagnostics(),
       api.sources(),
       api.library(),
       api.history(),
@@ -916,17 +937,213 @@ async function refreshFavoritesOnly() {
 
 function renderHealth(health) {
   state.health = health;
-  const ready = health.full_playback_available || (health.mpv_available && health.ffmpeg_available);
-  const missing = [];
-  if (!health.mpv_available) missing.push("mpv");
-  if (!health.ffmpeg_available) missing.push("ffmpeg");
-  els.health.className = ready ? "health ready" : "health";
-  els.health.textContent = ready ? "mpv + ffmpeg ready" : `Missing ${missing.join(" + ")}`;
-  els.health.title = ready
-    ? `mpv: ${health.mpv_path || "available"}\nffmpeg: ${health.ffmpeg_path || "available"}`
-    : health.install_hint || "Install mpv and ffmpeg for full playback.";
+  const ready = isPlaybackReady(health);
+  const issueCount = health.issues.length;
+  els.health.className = `health ${ready ? "ready" : "warning"} ${health.diagnostics_source === "health" ? "fallback" : ""}`;
+  els.healthStatus.textContent = ready ? "Playback ready" : "Needs setup";
+  els.healthSummary.textContent = diagnosticSummary(health, issueCount);
+  els.healthPlatform.textContent = health.platform || "Unknown";
+  els.healthSource.textContent = health.diagnostics_source === "health" ? "/health" : "/diagnostics";
+  els.health.title = diagnosticTooltip(health);
+
+  renderHealthTool(els.healthMpv, els.healthMpvVersion, els.healthMpvPath, health.mpv);
+  renderHealthTool(els.healthFfmpeg, els.healthFfmpegVersion, els.healthFfmpegPath, health.ffmpeg);
+  renderHealthIssues(health.issues);
+  renderHealthHint(health.install_hint);
+
   els.controlMpvButton.disabled = !ready || !state.currentMedia;
   renderMediaDetailActions();
+}
+
+function normalizePlaybackDiagnostics(data = {}, source = "diagnostics") {
+  const mpv = normalizeDiagnosticTool(data.mpv, {
+    present: data.mpv_present ?? data.mpv_available,
+    path: data.mpv_path,
+    version: data.mpv_version
+  });
+  const ffmpeg = normalizeDiagnosticTool(data.ffmpeg, {
+    present: data.ffmpeg_present ?? data.ffmpeg_available,
+    path: data.ffmpeg_path,
+    version: data.ffmpeg_version
+  });
+  const fullPlaybackAvailable = Boolean(data.full_playback_available ?? (mpv.present && ffmpeg.present));
+  const normalized = {
+    ...data,
+    platform: data.platform || navigator.platform || "Unknown",
+    mpv,
+    ffmpeg,
+    full_playback_available: fullPlaybackAvailable,
+    install_hint: data.install_hint || null,
+    diagnostics_source: source,
+    mpv_available: mpv.present,
+    ffmpeg_available: ffmpeg.present,
+    mpv_path: mpv.path,
+    ffmpeg_path: ffmpeg.path,
+    mpv_version: mpv.version,
+    ffmpeg_version: ffmpeg.version
+  };
+  normalized.issues = normalizeDiagnosticIssues(data.issues, normalized);
+  return normalized;
+}
+
+function normalizeDiagnosticTool(tool, legacy = {}) {
+  const raw = tool && typeof tool === "object" ? tool : {};
+  const path = raw.path ?? legacy.path ?? (typeof tool === "string" ? tool : null);
+  const version = raw.version ?? legacy.version ?? null;
+  const presentValue = raw.present ?? raw.available ?? raw.ok ?? legacy.present;
+  const present = typeof presentValue === "boolean"
+    ? presentValue
+    : presentValue == null
+      ? Boolean(path || version)
+      : Boolean(presentValue);
+  return {
+    present,
+    path: path || null,
+    version: version || null
+  };
+}
+
+function normalizeDiagnosticIssues(issues, diagnostics) {
+  const list = Array.isArray(issues) ? issues : issues ? [issues] : [];
+  const normalized = list
+    .map((issue) => normalizeDiagnosticIssue(issue))
+    .filter((issue) => issue.message || issue.action);
+
+  if (!diagnostics.mpv.present) {
+    normalized.push({
+      code: "missing_mpv",
+      severity: "warning",
+      message: "mpv is missing.",
+      action: diagnostics.install_hint || "Install mpv for native playback."
+    });
+  }
+
+  if (!diagnostics.ffmpeg.present) {
+    normalized.push({
+      code: "missing_ffmpeg",
+      severity: "warning",
+      message: "ffmpeg is missing.",
+      action: diagnostics.install_hint || "Install ffmpeg for codec inspection and conversion support."
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeDiagnosticIssue(issue) {
+  if (!issue) {
+    return { message: "", action: "", severity: "warning", code: "" };
+  }
+  if (typeof issue === "string") {
+    return { message: issue, action: "", severity: "warning", code: "" };
+  }
+  const action = issue.action ?? issue.fix ?? issue.hint ?? issue.install_hint ?? issue.resolution ?? "";
+  const message = issue.message ?? issue.detail ?? issue.description ?? issue.title ?? issue.code ?? "";
+  return {
+    code: issue.code || "",
+    severity: issue.severity || issue.level || "warning",
+    message: String(message),
+    action: stringifyDiagnosticValue(action)
+  };
+}
+
+function stringifyDiagnosticValue(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(stringifyDiagnosticValue).filter(Boolean).join("; ");
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function isPlaybackReady(health) {
+  return Boolean(health?.full_playback_available || (health?.mpv_available && health?.ffmpeg_available));
+}
+
+function diagnosticSummary(health, issueCount) {
+  if (!isPlaybackReady(health)) {
+    const missing = [];
+    if (!health.mpv.present) missing.push("mpv");
+    if (!health.ffmpeg.present) missing.push("ffmpeg");
+    return missing.length ? `Missing ${missing.join(" + ")}` : `${issueCount} issue${issueCount === 1 ? "" : "s"}`;
+  }
+  const parts = [
+    toolSummary("mpv", health.mpv),
+    toolSummary("ffmpeg", health.ffmpeg)
+  ];
+  return issueCount ? `${parts.join(" · ")} · ${issueCount} note${issueCount === 1 ? "" : "s"}` : parts.join(" · ");
+}
+
+function toolSummary(label, tool) {
+  if (!tool.present) {
+    return `${label} missing`;
+  }
+  return tool.version ? `${label} ${tool.version}` : `${label} ready`;
+}
+
+function diagnosticTooltip(health) {
+  const lines = [
+    `Source: ${health.diagnostics_source === "health" ? "/health fallback" : "/diagnostics/playback"}`,
+    `Platform: ${health.platform || "Unknown"}`,
+    `mpv: ${toolTooltip(health.mpv)}`,
+    `ffmpeg: ${toolTooltip(health.ffmpeg)}`
+  ];
+  if (health.issues.length) {
+    lines.push(`Issues: ${health.issues.map((issue) => issue.message).join("; ")}`);
+  }
+  if (health.install_hint) {
+    lines.push(`Action: ${health.install_hint}`);
+  }
+  return lines.join("\n");
+}
+
+function toolTooltip(tool) {
+  if (!tool.present) {
+    return "missing";
+  }
+  return [tool.version, tool.path].filter(Boolean).join(" · ") || "available";
+}
+
+function renderHealthTool(row, versionEl, pathEl, tool) {
+  row.classList.toggle("missing", !tool.present);
+  row.classList.toggle("ready", tool.present);
+  versionEl.textContent = tool.present ? (tool.version || "Available") : "Missing";
+  pathEl.textContent = tool.path || (tool.present ? "Path unavailable" : "");
+  pathEl.hidden = !tool.path && !tool.present;
+}
+
+function renderHealthIssues(issues) {
+  els.healthIssues.innerHTML = "";
+  els.healthIssues.hidden = issues.length === 0;
+  for (const issue of issues) {
+    const item = document.createElement("div");
+    item.className = `health-issue ${issue.severity || "warning"}`;
+
+    const message = document.createElement("span");
+    message.textContent = issue.message || "Playback issue detected.";
+    item.append(message);
+
+    if (issue.action) {
+      const action = document.createElement("small");
+      action.textContent = `Action: ${issue.action}`;
+      item.append(action);
+    }
+
+    els.healthIssues.append(item);
+  }
+}
+
+function renderHealthHint(hint) {
+  els.healthHint.textContent = hint || "";
+  els.healthHint.hidden = !hint;
 }
 
 function renderSources() {

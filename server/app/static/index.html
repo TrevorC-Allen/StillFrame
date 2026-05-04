@@ -121,7 +121,44 @@
             <span class="eyebrow">Local-first media center</span>
             <h1 id="title">Library</h1>
           </div>
-          <div id="health" class="health">Starting</div>
+          <details id="health" class="health health-loading">
+            <summary>
+              <span id="health-status">Starting</span>
+              <span id="health-summary">Checking playback</span>
+            </summary>
+            <div id="health-panel" class="health-panel" role="group" aria-label="Playback diagnostics">
+              <div class="health-grid">
+                <span>
+                  <small>Platform</small>
+                  <strong id="health-platform">-</strong>
+                </span>
+                <span>
+                  <small>Source</small>
+                  <strong id="health-source">-</strong>
+                </span>
+              </div>
+              <div class="health-dependencies">
+                <div class="health-dependency" id="health-mpv">
+                  <span class="health-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>mpv</strong>
+                    <span id="health-mpv-version">Checking</span>
+                    <code id="health-mpv-path"></code>
+                  </div>
+                </div>
+                <div class="health-dependency" id="health-ffmpeg">
+                  <span class="health-dot" aria-hidden="true"></span>
+                  <div>
+                    <strong>ffmpeg</strong>
+                    <span id="health-ffmpeg-version">Checking</span>
+                    <code id="health-ffmpeg-path"></code>
+                  </div>
+                </div>
+              </div>
+              <div id="health-issues" class="health-issues" hidden></div>
+              <div id="health-hint" class="health-hint" hidden></div>
+            </div>
+          </details>
         </header>
 
         <div id="error" class="error" hidden></div>

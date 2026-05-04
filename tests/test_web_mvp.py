@@ -61,10 +61,16 @@ def test_web_mvp_home_and_health() -> None:
     assert "forward-button" in home.text
     assert "fullscreen-button" in home.text
     assert "control-mpv-button" in home.text
+    assert "health-panel" in home.text
+    assert "health-mpv-version" in home.text
+    assert "health-ffmpeg-version" in home.text
+    assert "health-issues" in home.text
     assert "Fullscreen" in home.text
     assert favicon.status_code == 200
     assert mark.status_code == 200
     assert script.status_code == 200
+    assert "/diagnostics/playback" in script.text
+    assert "playbackDiagnostics" in script.text
     assert "/library/scan/jobs/" in script.text
     assert "/library/metadata/refresh" in script.text
     assert "refreshMetadata" in script.text
