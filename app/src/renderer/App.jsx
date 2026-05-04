@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { api } from "../api/client.js";
 import { FileBrowser } from "../components/FileBrowser.jsx";
 import { HistoryList } from "../components/HistoryList.jsx";
+import { LibraryPage } from "../pages/LibraryPage.jsx";
 import { PlayerPanel } from "../components/PlayerPanel.jsx";
 import { SettingsPage } from "../pages/SettingsPage.jsx";
 import { Sidebar } from "../components/Sidebar.jsx";
@@ -21,6 +22,8 @@ export default function App() {
   const [view, setView] = useState("library");
   const [activePath, setActivePath] = useState(null);
   const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const [scanSummary, setScanSummary] = useState(null);
 
   const favoritePaths = useMemo(
     () => new Set(favorites.map((favorite) => favorite.path)),
@@ -77,6 +80,17 @@ export default function App() {
     }
   }
 
+  async function refreshMediaCollections() {
+    const [libraryData, historyData, favoriteData] = await Promise.all([
+      api.library(),
+      api.history(),
+      api.favorites()
+    ]);
+    setLibraryItems(libraryData.items || []);
+    setHistory(historyData);
+    setFavorites(favoriteData);
+  }
+
   async function addFolder() {
     setError(null);
     const selected = await window.stillframe?.chooseFolder?.();
@@ -131,8 +145,7 @@ export default function App() {
     try {
       const state = await api.play(path);
       setPlayerState(state);
-      setHistory(await api.history());
-      setLibraryItems((await api.library()).items || []);
+      await refreshMediaCollections();
     } catch (caught) {
       setError(caught.message);
     }
@@ -144,7 +157,7 @@ export default function App() {
       const state = await api.playerCommand(command, value);
       setPlayerState(state);
       if (command === "stop") {
-        setHistory(await api.history());
+        await refreshMediaCollections();
       }
     } catch (caught) {
       setError(caught.message);
@@ -154,10 +167,9 @@ export default function App() {
   async function toggleFavorite(item) {
     setError(null);
     try {
-      const isFavorite = favoritePaths.has(item.path);
-      await api.setFavorite(item.path, item.title || item.name, !isFavorite);
-      setFavorites(await api.favorites());
-      setLibraryItems((await api.library()).items || []);
+      const isFavorite = favoritePaths.has(item.path) || item.favorite;
+      await api.setFavorite(item.path, item.title || item.display_title || item.name, !isFavorite);
+      await refreshMediaCollections();
       if (browseData) {
         setBrowseData({
           ...browseData,
@@ -187,12 +199,23 @@ export default function App() {
   }
 
   async function scanLibrary() {
+    if (scanning) {
+      return;
+    }
     setError(null);
+    setScanning(true);
     try {
-      await api.scanLibrary();
-      setLibraryItems((await api.library()).items || []);
+      const result = await api.scanLibrary();
+      const [sourceData] = await Promise.all([
+        api.sources(),
+        refreshMediaCollections()
+      ]);
+      setSources(sourceData);
+      setScanSummary(result);
     } catch (caught) {
       setError(caught.message);
+    } finally {
+      setScanning(false);
     }
   }
 
@@ -206,6 +229,7 @@ export default function App() {
         onOpenSource={openSource}
         onViewChange={setView}
         onScanLibrary={scanLibrary}
+        scanning={scanning}
       />
 
       <main className="workspace">
@@ -249,12 +273,14 @@ export default function App() {
         )}
 
         {view === "index" && (
-          <HistoryList
-            title="Library"
+          <LibraryPage
             items={libraryItems}
             favoritePaths={favoritePaths}
             onPlay={play}
             onToggleFavorite={toggleFavorite}
+            onScanLibrary={scanLibrary}
+            scanning={scanning}
+            scanSummary={scanSummary}
           />
         )}
 
