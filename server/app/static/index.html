@@ -308,6 +308,51 @@
               <option value="type">Type</option>
             </select>
           </div>
+          <div id="library-facets" class="library-facets" hidden>
+            <div id="library-facet-tabs" class="facet-tabs" role="group" aria-label="Library quick filters">
+              <button id="library-facet-all" class="facet-tab active" type="button" data-library-mode="all" aria-pressed="true">
+                <span>All</span>
+                <strong>0</strong>
+              </button>
+              <button id="library-facet-movie" class="facet-tab" type="button" data-library-mode="movie" aria-pressed="false">
+                <span>Movie</span>
+                <strong>0</strong>
+              </button>
+              <button id="library-facet-tv" class="facet-tab" type="button" data-library-mode="tv" aria-pressed="false">
+                <span>TV</span>
+                <strong>0</strong>
+              </button>
+              <button id="library-facet-favorites" class="facet-tab" type="button" data-library-mode="favorites" aria-pressed="false">
+                <span>Favorites</span>
+                <strong>0</strong>
+              </button>
+              <button id="library-facet-offline" class="facet-tab" type="button" data-library-mode="offline" aria-pressed="false">
+                <span>Offline</span>
+                <strong>0</strong>
+              </button>
+            </div>
+            <div class="facet-selects">
+              <label class="facet-select-label" for="library-year-filter">
+                <span>Year</span>
+                <select id="library-year-filter" class="facet-select" aria-label="Filter library by year">
+                  <option value="">All years</option>
+                </select>
+              </label>
+              <label class="facet-select-label" for="library-quality-filter">
+                <span>Quality</span>
+                <select id="library-quality-filter" class="facet-select" aria-label="Filter library by quality">
+                  <option value="">All quality</option>
+                </select>
+              </label>
+              <label class="facet-select-label" for="library-source-filter">
+                <span>Source</span>
+                <select id="library-source-filter" class="facet-select" aria-label="Filter library by source">
+                  <option value="">All sources</option>
+                </select>
+              </label>
+            </div>
+            <div id="library-facet-stats" class="facet-stats" aria-live="polite"></div>
+          </div>
           <div id="items" class="items"></div>
         </section>
       </main>

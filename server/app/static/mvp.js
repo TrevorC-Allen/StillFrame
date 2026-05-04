@@ -36,10 +36,17 @@ const api = {
     method: "POST",
     body: JSON.stringify({ path })
   }),
-  library: (search = "", sort = "recent", limit = 24) => {
+  library: (search = "", sort = "recent", limit = 24, filters = {}) => {
     const params = new URLSearchParams({ limit: String(limit), sort });
     if (search) params.set("search", search);
+    appendLibraryFilterParams(params, filters);
     return api.request(`/library?${params.toString()}`);
+  },
+  libraryFacets: (search = "") => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    const query = params.toString();
+    return api.request(`/library/facets${query ? `?${query}` : ""}`);
   },
   scanLibrary: () => api.request("/library/scan", {
     method: "POST",
@@ -69,6 +76,7 @@ const state = {
   sources: [],
   libraryItems: [],
   libraryRows: [],
+  libraryFacetRows: [],
   history: [],
   favoriteItems: [],
   favorites: new Set(),
@@ -81,6 +89,12 @@ const state = {
   libraryFilter: "",
   librarySort: "recent",
   librarySearchTimer: null,
+  libraryFacetMode: "all",
+  libraryYear: "",
+  libraryQuality: "",
+  librarySourceId: "",
+  libraryFacets: emptyLibraryFacets(),
+  libraryFacetSource: "local",
   currentMedia: null,
   resumePosition: 0,
   resumeApplied: false,
@@ -97,6 +111,7 @@ const state = {
 
 const PREFS_KEY = "stillframe.mvp.preferences";
 const SCAN_POLL_INTERVAL_MS = 1200;
+const NUMBER_FORMATTER = new Intl.NumberFormat();
 
 const ICONS = {
   drive: '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.8A2.8 2.8 0 0 1 7.3 3h9.4a2.8 2.8 0 0 1 2.8 2.8v12.4a2.8 2.8 0 0 1-2.8 2.8H7.3a2.8 2.8 0 0 1-2.8-2.8V5.8Z"/><path d="M8 16.5h8"/><path d="M8 7.5h8"/></svg>',
@@ -191,6 +206,12 @@ const els = {
   libraryCount: document.querySelector("#library-count"),
   libraryFilter: document.querySelector("#library-filter"),
   librarySort: document.querySelector("#library-sort"),
+  libraryFacets: document.querySelector("#library-facets"),
+  libraryFacetButtons: [...document.querySelectorAll("[data-library-mode]")],
+  libraryYearFilter: document.querySelector("#library-year-filter"),
+  libraryQualityFilter: document.querySelector("#library-quality-filter"),
+  librarySourceFilter: document.querySelector("#library-source-filter"),
+  libraryFacetStats: document.querySelector("#library-facet-stats"),
   continueShelf: document.querySelector("#continue-shelf"),
   continueItems: document.querySelector("#continue-items"),
   continueCount: document.querySelector("#continue-count"),
@@ -281,11 +302,7 @@ function bindEvents() {
     els.browserFilter.value = state.libraryFilter;
     clearTimeout(state.librarySearchTimer);
     state.librarySearchTimer = setTimeout(() => {
-      refreshLibraryOnly()
-        .then(() => {
-          renderShelves();
-          if (state.mainView === "library") renderBrowser();
-        })
+      refreshLibraryForActiveView()
         .catch((error) => showError(error.message));
     }, 180);
   });
@@ -294,10 +311,32 @@ function bindEvents() {
     state.librarySort = els.librarySort.value;
     els.browserSort.value = state.librarySort;
     await run(async () => {
-      await refreshLibraryOnly();
-      renderShelves();
-      if (state.mainView === "library") renderBrowser();
+      await refreshLibraryForActiveView();
     });
+  });
+
+  for (const button of els.libraryFacetButtons) {
+    button.addEventListener("click", async () => {
+      const mode = button.dataset.libraryMode || "all";
+      if (state.libraryFacetMode === mode) return;
+      state.libraryFacetMode = mode;
+      await run(refreshLibraryForActiveView);
+    });
+  }
+
+  els.libraryYearFilter.addEventListener("change", async () => {
+    state.libraryYear = els.libraryYearFilter.value;
+    await run(refreshLibraryForActiveView);
+  });
+
+  els.libraryQualityFilter.addEventListener("change", async () => {
+    state.libraryQuality = els.libraryQualityFilter.value;
+    await run(refreshLibraryForActiveView);
+  });
+
+  els.librarySourceFilter.addEventListener("change", async () => {
+    state.librarySourceId = els.librarySourceFilter.value;
+    await run(refreshLibraryForActiveView);
   });
 
   els.backButton.addEventListener("click", async () => {
@@ -311,7 +350,7 @@ function bindEvents() {
       els.libraryFilter.value = state.libraryFilter;
       clearTimeout(state.librarySearchTimer);
       state.librarySearchTimer = setTimeout(() => {
-        refreshLibraryRows().then(renderBrowser).catch((error) => showError(error.message));
+        refreshLibraryForActiveView().catch((error) => showError(error.message));
       }, 180);
     } else {
       state.browserFilter = els.browserFilter.value.trim().toLowerCase();
@@ -323,8 +362,7 @@ function bindEvents() {
       state.librarySort = els.browserSort.value;
       els.librarySort.value = state.librarySort;
       await run(async () => {
-        await refreshLibraryRows();
-        renderBrowser();
+        await refreshLibraryForActiveView();
       });
     } else {
       state.browserSort = els.browserSort.value;
@@ -447,16 +485,18 @@ async function refresh() {
     const [health, sources, library, history, favorites] = await Promise.all([
       api.playbackDiagnostics(),
       api.sources(),
-      api.library(),
+      api.library(state.libraryFilter, state.librarySort, 24, activeLibraryFilters()),
       api.history(),
       api.favorites()
     ]);
     renderHealth(health);
     state.sources = sources;
-    state.libraryItems = library.items || [];
     state.history = history;
     state.favoriteItems = favorites;
     state.favorites = new Set(favorites.map((item) => item.path));
+    state.libraryFacetRows = Array.isArray(library.items) ? library.items : [];
+    state.libraryItems = applyLocalLibraryFilters(state.libraryFacetRows).slice(0, 24);
+    await refreshLibraryFacets(state.libraryFacetRows);
     renderSources();
     renderHistory();
     renderShelves();
@@ -910,29 +950,60 @@ async function toggleFavorite(item) {
     await api.setFavorite(item.path, title, next);
     if (next) state.favorites.add(item.path);
     else state.favorites.delete(item.path);
-    renderBrowser();
     renderHistory();
     await refreshLibraryOnly();
+    if (state.mainView === "library") {
+      await refreshLibraryRows();
+    }
     await refreshFavoritesOnly();
     renderShelves();
+    if (state.mainView === "library") {
+      renderBrowser();
+    }
     renderFavoriteButton();
     renderMediaDetailActions();
   });
 }
 
 async function refreshLibraryOnly() {
-  const library = await api.library(state.libraryFilter, state.librarySort);
-  state.libraryItems = library.items || [];
+  const library = await fetchLibraryItems(24);
+  state.libraryItems = library.items;
+  state.libraryFacetRows = library.rawItems;
+  await refreshLibraryFacets(library.rawItems);
 }
 
 async function refreshLibraryRows() {
-  const library = await api.library(state.libraryFilter, state.librarySort, 200);
-  state.libraryRows = library.items || [];
+  const library = await fetchLibraryItems(200);
+  state.libraryRows = library.items;
+  state.libraryFacetRows = library.rawItems;
+  await refreshLibraryFacets(library.rawItems);
 }
 
 async function refreshFavoritesOnly() {
   state.favoriteItems = await api.favorites();
   state.favorites = new Set(state.favoriteItems.map((item) => item.path));
+}
+
+async function refreshLibraryForActiveView() {
+  await refreshLibraryOnly();
+  if (state.mainView === "library") {
+    await refreshLibraryRows();
+  }
+  renderShelves();
+  if (state.mainView === "library") {
+    renderBrowser();
+  }
+}
+
+async function fetchLibraryItems(limit) {
+  const requestedLimit = hasLibraryConstraints() ? Math.max(limit, 200) : limit;
+  const library = await api.library(state.libraryFilter, state.librarySort, requestedLimit, activeLibraryFilters());
+  const rawItems = Array.isArray(library.items) ? library.items : [];
+  return {
+    ...library,
+    rawItems,
+    items: applyLocalLibraryFilters(rawItems).slice(0, limit)
+  };
 }
 
 function renderHealth(health) {
@@ -1295,7 +1366,460 @@ function renderPosterShelf(container, target, countTarget, items, actionLabel) {
   }
 }
 
+function activeLibraryFilters() {
+  return {
+    mode: state.libraryFacetMode,
+    year: state.libraryYear,
+    quality: state.libraryQuality,
+    sourceId: state.librarySourceId
+  };
+}
+
+function appendLibraryFilterParams(params, filters = {}) {
+  params.set("include_unavailable", "true");
+
+  if (filters.mode === "movie" || filters.mode === "tv") {
+    params.set("media_type", filters.mode);
+  } else if (filters.mode === "favorites") {
+    params.set("favorite", "true");
+  } else if (filters.mode === "offline") {
+    params.set("available", "false");
+  }
+
+  if (filters.year) {
+    params.set("year", String(filters.year));
+  }
+  if (filters.quality) {
+    params.set("quality", String(filters.quality));
+  }
+  if (filters.sourceId && isNumericSourceId(filters.sourceId)) {
+    params.set("source_id", String(filters.sourceId));
+  }
+}
+
+function hasLibraryConstraints() {
+  return Boolean(
+    state.libraryFilter ||
+    state.libraryFacetMode !== "all" ||
+    state.libraryYear ||
+    state.libraryQuality ||
+    state.librarySourceId
+  );
+}
+
+function applyLocalLibraryFilters(items) {
+  return items.filter((item) => (
+    matchesLibrarySearch(item) &&
+    matchesLibraryMode(item) &&
+    matchesLibraryYear(item) &&
+    matchesLibraryQuality(item) &&
+    matchesLibrarySource(item)
+  ));
+}
+
+function matchesLibrarySearch(item) {
+  const query = state.libraryFilter.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  const searchable = [
+    displayTitle(item),
+    item.name,
+    item.year,
+    item.quality,
+    item.source_path,
+    item.overview
+  ].filter((value) => value != null).join(" ").toLowerCase();
+  return searchable.includes(query);
+}
+
+function matchesLibraryMode(item) {
+  if (state.libraryFacetMode === "movie") {
+    return normalizedMediaType(item) === "movie";
+  }
+  if (state.libraryFacetMode === "tv") {
+    return normalizedMediaType(item) === "tv";
+  }
+  if (state.libraryFacetMode === "favorites") {
+    return isFavoriteItem(item);
+  }
+  if (state.libraryFacetMode === "offline") {
+    return !isMediaAvailable(item);
+  }
+  return true;
+}
+
+function matchesLibraryYear(item) {
+  return !state.libraryYear || String(item.year || "") === state.libraryYear;
+}
+
+function matchesLibraryQuality(item) {
+  return !state.libraryQuality || normalizedQuality(item.quality) === state.libraryQuality;
+}
+
+function matchesLibrarySource(item) {
+  return !state.librarySourceId || sourceFacetValue(item) === state.librarySourceId;
+}
+
+async function refreshLibraryFacets(rows = []) {
+  const localRows = rows.length ? rows : libraryRowsForFacets();
+  try {
+    const facets = await api.libraryFacets(state.libraryFilter);
+    state.libraryFacets = normalizeLibraryFacets(facets, localRows);
+    state.libraryFacetSource = "api";
+  } catch {
+    state.libraryFacets = buildLibraryFacetsFromRows(localRows);
+    state.libraryFacetSource = "local";
+  }
+  renderLibraryFacets();
+}
+
+function libraryRowsForFacets() {
+  return state.libraryFacetRows.length
+    ? state.libraryFacetRows
+    : dedupeItemsByPath([...state.libraryRows, ...state.libraryItems]);
+}
+
+function emptyLibraryFacets() {
+  return {
+    total: 0,
+    counts: {
+      all: 0,
+      movie: 0,
+      tv: 0,
+      favorites: 0,
+      offline: 0
+    },
+    years: [],
+    qualities: [],
+    sources: []
+  };
+}
+
+function buildLibraryFacetsFromRows(rows = []) {
+  const facets = emptyLibraryFacets();
+  const years = new Map();
+  const qualities = new Map();
+  const sources = new Map();
+  const uniqueRows = dedupeItemsByPath(rows);
+
+  facets.counts.all = uniqueRows.length;
+  facets.total = uniqueRows.length;
+
+  for (const item of uniqueRows) {
+    const mediaType = normalizedMediaType(item);
+    if (mediaType === "movie") facets.counts.movie += 1;
+    if (mediaType === "tv") facets.counts.tv += 1;
+    if (isFavoriteItem(item)) facets.counts.favorites += 1;
+    if (!isMediaAvailable(item)) facets.counts.offline += 1;
+
+    if (item.year) {
+      addFacetOption(years, String(item.year), String(item.year));
+    }
+
+    const quality = normalizedQuality(item.quality);
+    if (quality) {
+      addFacetOption(qualities, quality, quality);
+    }
+
+    const sourceValue = sourceFacetValue(item);
+    if (sourceValue) {
+      addFacetOption(sources, sourceValue, sourceFacetLabel(item));
+    }
+  }
+
+  facets.years = facetOptionsFromMap(years).sort((a, b) => Number(b.value) - Number(a.value));
+  facets.qualities = facetOptionsFromMap(qualities).sort(compareQualityOptions);
+  facets.sources = facetOptionsFromMap(sources).sort((a, b) => a.label.localeCompare(b.label));
+  return facets;
+}
+
+function normalizeLibraryFacets(payload, fallbackRows = []) {
+  const fallback = buildLibraryFacetsFromRows(fallbackRows);
+  if (!payload || typeof payload !== "object") {
+    return fallback;
+  }
+
+  const bag = payload.facets && typeof payload.facets === "object"
+    ? { ...payload.facets, ...payload }
+    : payload;
+  const countBag = firstObject(bag.counts, bag.totals, bag.summary);
+  const mediaTypeOptions = normalizeFacetOptions(
+    bag.media_types || bag.media_type || bag.types,
+    ["value", "key", "media_type", "type"],
+    []
+  );
+  const mediaCounts = new Map(mediaTypeOptions.map((option) => [String(option.value).toLowerCase(), option.count]));
+  const counts = {
+    all: numberOr(countBag.all ?? countBag.total ?? bag.total, fallback.counts.all),
+    movie: numberOr(countBag.movie ?? countBag.movies ?? mediaCounts.get("movie"), fallback.counts.movie),
+    tv: numberOr(countBag.tv ?? countBag.series ?? mediaCounts.get("tv"), fallback.counts.tv),
+    favorites: numberOr(countBag.favorites ?? countBag.favorite ?? bag.favorites ?? bag.favorite, fallback.counts.favorites),
+    offline: numberOr(countBag.offline ?? countBag.unavailable ?? countBag.available_false ?? bag.offline, fallback.counts.offline)
+  };
+
+  return {
+    total: counts.all,
+    counts,
+    years: normalizeFacetOptions(bag.years || bag.year, ["value", "key", "year"], fallback.years)
+      .sort((a, b) => Number(b.value) - Number(a.value)),
+    qualities: normalizeFacetOptions(bag.qualities || bag.quality, ["value", "key", "quality"], fallback.qualities)
+      .map((option) => ({ ...option, value: normalizedQuality(option.value), label: option.label || normalizedQuality(option.value) }))
+      .filter((option) => option.value)
+      .sort(compareQualityOptions),
+    sources: normalizeSourceFacetOptions(bag.sources || bag.source_id || bag.source_ids, fallback.sources)
+      .sort((a, b) => a.label.localeCompare(b.label))
+  };
+}
+
+function renderLibraryFacets() {
+  if (!els.libraryFacets) {
+    return;
+  }
+
+  const visible = state.mainView === "library";
+  els.libraryFacets.hidden = !visible;
+  if (!visible) {
+    return;
+  }
+
+  const facets = state.libraryFacets || emptyLibraryFacets();
+  for (const button of els.libraryFacetButtons) {
+    const mode = button.dataset.libraryMode || "all";
+    const active = state.libraryFacetMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+    const count = button.querySelector("strong");
+    if (count) {
+      count.textContent = formatFacetCount(facetCountForMode(facets, mode));
+    }
+  }
+
+  setFacetSelectOptions(els.libraryYearFilter, "All years", facets.years, state.libraryYear);
+  setFacetSelectOptions(els.libraryQualityFilter, "All quality", facets.qualities, state.libraryQuality);
+  setFacetSelectOptions(els.librarySourceFilter, "All sources", facets.sources, state.librarySourceId);
+  renderLibraryFacetStats(facets);
+}
+
+function renderLibraryFacetStats(facets) {
+  const stats = [
+    ["Showing", state.libraryRows.length || state.libraryItems.length],
+    ["Indexed", facets.counts.all],
+    ["Movies", facets.counts.movie],
+    ["TV", facets.counts.tv],
+    ["Favorites", facets.counts.favorites],
+    ["Offline", facets.counts.offline]
+  ];
+
+  els.libraryFacetStats.innerHTML = "";
+  for (const [label, value] of stats) {
+    const chip = document.createElement("span");
+    chip.className = "facet-stat-chip";
+    chip.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(formatFacetValue(value))}</strong>`;
+    els.libraryFacetStats.append(chip);
+  }
+}
+
+function setFacetSelectOptions(select, placeholder, options, selectedValue) {
+  const safeOptions = Array.isArray(options) ? options : [];
+  const selected = selectedValue || "";
+  select.innerHTML = "";
+  select.append(new Option(placeholder, ""));
+  for (const option of safeOptions) {
+    const label = option.count == null
+      ? option.label
+      : `${option.label} (${formatFacetCount(option.count)})`;
+    select.append(new Option(label, option.value));
+  }
+
+  if (selected && !safeOptions.some((option) => option.value === selected)) {
+    select.append(new Option(`${selected.replace(/^path:/, "")} (0)`, selected));
+  }
+  select.value = selected;
+}
+
+function facetCountForMode(facets, mode) {
+  if (mode === "all") return facets.counts.all;
+  if (mode === "movie") return facets.counts.movie;
+  if (mode === "tv") return facets.counts.tv;
+  if (mode === "favorites") return facets.counts.favorites;
+  if (mode === "offline") return facets.counts.offline;
+  return 0;
+}
+
+function normalizeFacetOptions(input, valueKeys, fallback) {
+  if (!input) {
+    return fallback;
+  }
+
+  const entries = Array.isArray(input)
+    ? input
+    : Object.entries(input).map(([value, count]) => ({ value, label: value, count }));
+  const options = entries
+    .map((entry) => normalizeFacetOption(entry, valueKeys))
+    .filter((option) => option.value);
+  return options.length ? options : fallback;
+}
+
+function normalizeFacetOption(entry, valueKeys) {
+  if (entry == null) {
+    return { value: "", label: "", count: null };
+  }
+  if (typeof entry !== "object") {
+    const value = String(entry);
+    return { value, label: value, count: null };
+  }
+
+  const value = firstDefined(...valueKeys.map((key) => entry[key]));
+  const label = firstDefined(entry.label, entry.name, entry.title, value);
+  return {
+    value: value == null ? "" : String(value),
+    label: label == null ? "" : String(label),
+    count: numberOr(firstDefined(entry.count, entry.total), null)
+  };
+}
+
+function normalizeSourceFacetOptions(input, fallback) {
+  if (!input) {
+    return fallback;
+  }
+
+  const entries = Array.isArray(input)
+    ? input
+    : Object.entries(input).map(([value, count]) => ({ source_id: value, count }));
+  const options = entries
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return { value: "", label: "", count: null };
+      }
+      const id = firstDefined(entry.source_id, entry.id, entry.value, entry.key);
+      const path = firstDefined(entry.path, entry.source_path);
+      const value = id != null ? String(id) : path ? `path:${path}` : "";
+      const label = firstDefined(entry.name, entry.label, sourceNameById(id), basename(path), value);
+      return {
+        value,
+        label: String(label || value),
+        count: numberOr(firstDefined(entry.count, entry.total), null)
+      };
+    })
+    .filter((option) => option.value);
+  return options.length ? options : fallback;
+}
+
+function addFacetOption(map, value, label) {
+  const existing = map.get(value);
+  if (existing) {
+    existing.count += 1;
+    return;
+  }
+  map.set(value, { value, label, count: 1 });
+}
+
+function facetOptionsFromMap(map) {
+  return [...map.values()];
+}
+
+function dedupeItemsByPath(items) {
+  const seen = new Set();
+  const unique = [];
+  for (const item of items) {
+    const key = item?.path || `${item?.source_id || ""}:${item?.name || unique.length}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique;
+}
+
+function normalizedMediaType(item) {
+  const value = String(item?.media_type || "").toLowerCase();
+  if (value === "movie") return "movie";
+  if (value === "tv" || value === "series" || value === "episode") return "tv";
+  if (item?.season != null || item?.episode != null) return "tv";
+  return value;
+}
+
+function normalizedQuality(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function compareQualityOptions(a, b) {
+  return qualityRank(b.value) - qualityRank(a.value) || a.label.localeCompare(b.label);
+}
+
+function qualityRank(value) {
+  const normalized = normalizedQuality(value);
+  const match = normalized.match(/(\d{3,4})P/);
+  if (match) {
+    return Number(match[1]);
+  }
+  if (normalized === "4K" || normalized === "UHD") {
+    return 2160;
+  }
+  return 0;
+}
+
+function isFavoriteItem(item) {
+  return Boolean(item?.favorite || state.favorites.has(item?.path));
+}
+
+function sourceFacetValue(item) {
+  if (item?.source_id != null) {
+    return String(item.source_id);
+  }
+  if (item?.source_path) {
+    return `path:${item.source_path}`;
+  }
+  return "";
+}
+
+function sourceFacetLabel(item) {
+  const byId = sourceNameById(item?.source_id);
+  if (byId) {
+    return byId;
+  }
+  return basename(item?.source_path) || "Unknown source";
+}
+
+function sourceNameById(id) {
+  if (id == null) {
+    return "";
+  }
+  const source = state.sources.find((entry) => String(entry.id) === String(id));
+  return source?.name || "";
+}
+
+function basename(path) {
+  return String(path || "").split("/").filter(Boolean).at(-1) || "";
+}
+
+function isNumericSourceId(value) {
+  return /^\d+$/.test(String(value));
+}
+
+function firstObject(...values) {
+  return values.find((value) => value && typeof value === "object" && !Array.isArray(value)) || {};
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+function numberOr(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function formatFacetCount(value) {
+  return NUMBER_FORMATTER.format(Number(value || 0));
+}
+
+function formatFacetValue(value) {
+  return typeof value === "number" ? formatFacetCount(value) : String(value);
+}
+
 function renderBrowser() {
+  els.libraryFacets.hidden = state.mainView !== "library";
   if (state.mainView === "library") {
     renderIndexedLibrary();
     return;
@@ -1401,25 +1925,23 @@ function renderBrowser() {
 }
 
 function renderIndexedLibrary() {
+  renderLibraryFacets();
   els.title.textContent = "Library";
-  els.currentPath.textContent = state.libraryFilter ? `Indexed library matching "${state.libraryFilter}"` : "Indexed library";
+  const summary = libraryFilterSummary();
+  els.currentPath.textContent = summary ? `Indexed library · ${summary}` : "Indexed library";
   els.backButton.disabled = true;
   els.items.innerHTML = "";
 
   if (state.libraryRows.length === 0) {
     renderEmptyBrowser(
-      state.libraryFilter ? "No library matches" : "Library index is empty",
-      state.libraryFilter
-        ? "Nothing indexed matches the current search."
+      hasLibraryConstraints() ? "No library matches" : "Library index is empty",
+      hasLibraryConstraints()
+        ? "Nothing indexed matches the current filters."
         : "Scan your connected sources to build the local library index.",
-      state.libraryFilter ? "Clear Search" : "Scan Library",
+      hasLibraryConstraints() ? "Clear Filters" : "Scan Library",
       async () => {
-        if (state.libraryFilter) {
-          state.libraryFilter = "";
-          els.libraryFilter.value = "";
-          els.browserFilter.value = "";
-          await refreshLibraryRows();
-          renderBrowser();
+        if (hasLibraryConstraints()) {
+          await clearLibraryFilters();
         } else {
           await scanLibrary();
         }
@@ -1473,6 +1995,35 @@ function renderIndexedLibrary() {
     row.append(main, quality, playAction, mpvAction, favoriteAction);
     els.items.append(row);
   }
+}
+
+async function clearLibraryFilters() {
+  state.libraryFilter = "";
+  state.libraryFacetMode = "all";
+  state.libraryYear = "";
+  state.libraryQuality = "";
+  state.librarySourceId = "";
+  els.libraryFilter.value = "";
+  els.browserFilter.value = "";
+  await refreshLibraryForActiveView();
+}
+
+function libraryFilterSummary() {
+  const parts = [];
+  if (state.libraryFilter) parts.push(`search "${state.libraryFilter}"`);
+  if (state.libraryFacetMode === "movie") parts.push("Movie");
+  if (state.libraryFacetMode === "tv") parts.push("TV");
+  if (state.libraryFacetMode === "favorites") parts.push("Favorites");
+  if (state.libraryFacetMode === "offline") parts.push("Offline");
+  if (state.libraryYear) parts.push(state.libraryYear);
+  if (state.libraryQuality) parts.push(state.libraryQuality);
+  if (state.librarySourceId) parts.push(selectedSourceLabel());
+  return parts.join(" · ");
+}
+
+function selectedSourceLabel() {
+  const option = (state.libraryFacets.sources || []).find((source) => source.value === state.librarySourceId);
+  return option?.label || state.librarySourceId.replace(/^path:/, "");
 }
 
 function showMediaDetail(item) {

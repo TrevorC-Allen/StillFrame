@@ -6,9 +6,9 @@ StillFrame is a local-first desktop media center for macOS. It uses Electron and
 
 - Local folders and Finder-mounted NAS paths.
 - File browsing with current-folder filter/sort, recent playback, favorites, playback progress, and settings.
-- Local library indexing for faster shelves, full-library search, and whole-library views.
+- Local library indexing for faster shelves, full-library search, whole-library views, and Web MVP library facets for media type, favorites, offline items, year, quality, and source.
 - Poster and overview generation from local filenames, with optional TMDb metadata enrichment.
-- Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, and mpv launch actions.
+- Web MVP media details drawer with poster, overview, source path, metadata source, favorite, browser preview, mpv launch actions, and library filter chips.
 - Local subtitles matched from the media folder.
 - Source availability checks for disconnected NAS paths.
 - Browser preview resumes unfinished videos from saved progress.
@@ -85,7 +85,8 @@ The local API listens on `http://127.0.0.1:8765`.
 - `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg presence, paths, versions, preview support, playback issues, and install hints.
 - `GET /sources`
 - `POST /sources`
-- `GET /library`
+- `GET /library` supports search, sort, limit, and may accept `media_type`, `year`, `quality`, `source_id`, `favorite`, and `available` filters.
+- `GET /library/facets` returns library facet counts/options when available; the Web MVP falls back to local counts from loaded rows if it is absent.
 - `POST /library/scan` starts a background scan job by default.
 - `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
 - `GET /library/scan/jobs`
