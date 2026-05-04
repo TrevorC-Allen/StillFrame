@@ -43,6 +43,9 @@ export const api = {
     }
   },
   cacheDiagnostics: () => request("/diagnostics/cache"),
+  clearCache: (bucket = "all") => request(`/diagnostics/cache/clear?bucket=${encodeURIComponent(bucket)}`, {
+    method: "POST"
+  }),
   sources: () => request("/sources"),
   addSource: (path, name) => request("/sources", {
     method: "POST",

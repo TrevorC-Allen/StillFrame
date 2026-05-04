@@ -1059,6 +1059,14 @@ h2 {
   color: #e6b450;
 }
 
+.text-button.danger {
+  color: #ffb094;
+}
+
+.text-button.danger:hover {
+  background: rgba(226, 117, 85, 0.16);
+}
+
 .player-panel {
   display: flex;
   min-width: 0;

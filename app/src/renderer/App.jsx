@@ -41,6 +41,7 @@ export default function App() {
   const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
   const [cacheDiagnostics, setCacheDiagnostics] = useState(null);
   const [cacheRefreshing, setCacheRefreshing] = useState(false);
+  const [cacheClearing, setCacheClearing] = useState(false);
   const libraryQueryRef = useRef(DEFAULT_LIBRARY_QUERY);
   const didLoadInitialLibrary = useRef(false);
 
@@ -425,6 +426,24 @@ export default function App() {
     }
   }
 
+  async function clearMediaCache(bucket = "all") {
+    if (cacheClearing) {
+      return;
+    }
+
+    setError(null);
+    setCacheClearing(true);
+    try {
+      const diagnostics = await api.clearCache(bucket);
+      setCacheDiagnostics(diagnostics);
+      await refreshMediaCollections();
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setCacheClearing(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -519,6 +538,8 @@ export default function App() {
             diagnosticsRefreshing={diagnosticsRefreshing}
             onRefreshCacheDiagnostics={refreshCacheDiagnostics}
             cacheRefreshing={cacheRefreshing}
+            onClearMediaCache={clearMediaCache}
+            cacheClearing={cacheClearing}
           />
         )}
       </main>

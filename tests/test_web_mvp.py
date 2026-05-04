@@ -191,6 +191,33 @@ def test_cache_diagnostics_counts_local_media_cache(tmp_path: Path, monkeypatch)
     assert buckets["subtitles"]["files"] == 1
 
 
+def test_cache_clear_removes_only_selected_cache_bucket(tmp_path: Path, monkeypatch) -> None:
+    cache_root = tmp_path / "media_cache"
+    posters = cache_root / "posters"
+    subtitles = cache_root / "subtitles"
+    posters.mkdir(parents=True)
+    subtitles.mkdir(parents=True)
+    poster = posters / "a.jpg"
+    subtitle = subtitles / "movie.srt"
+    poster.write_bytes(b"poster")
+    subtitle.write_text("subtitle", encoding="utf-8")
+    monkeypatch.setattr(diagnostics_module, "MEDIA_CACHE_DIR", cache_root)
+
+    with TestClient(app) as client:
+        response = client.post("/diagnostics/cache/clear", params={"bucket": "posters"})
+
+    payload = response.json()
+    buckets = {bucket["name"]: bucket for bucket in payload["buckets"]}
+
+    assert response.status_code == 200
+    assert payload["removed_files"] == 1
+    assert payload["removed_bytes"] == len(b"poster")
+    assert poster.exists() is False
+    assert subtitle.exists() is True
+    assert buckets["posters"]["files"] == 0
+    assert buckets["subtitles"]["files"] == 1
+
+
 def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     app_state.database.path = tmp_path / "api-test.db"
     app_state.initialize()

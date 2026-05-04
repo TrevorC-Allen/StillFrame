@@ -59,6 +59,11 @@ class CacheDiagnosticsResponse(BaseModel):
     buckets: list[CacheBucketDiagnostics]
 
 
+class CacheClearResponse(CacheDiagnosticsResponse):
+    removed_files: int
+    removed_bytes: int
+
+
 class SourceCreate(BaseModel):
     path: str
     name: Optional[str] = None

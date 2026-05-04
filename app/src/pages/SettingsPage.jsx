@@ -8,7 +8,9 @@ export function SettingsPage({
   onRefreshDiagnostics,
   diagnosticsRefreshing = false,
   onRefreshCacheDiagnostics,
-  cacheRefreshing = false
+  cacheRefreshing = false,
+  onClearMediaCache,
+  cacheClearing = false
 }) {
   const ready = playbackReady(health);
   const issues = health?.issues || [];
@@ -102,6 +104,15 @@ export function SettingsPage({
             <RefreshCw size={15} className={cacheRefreshing ? "spinning" : ""} />
             <span>{cacheRefreshing ? "Refreshing" : "Refresh Cache"}</span>
           </button>
+          <button
+            className="text-button diagnostics-refresh-button danger"
+            type="button"
+            onClick={() => confirmClearCache(onClearMediaCache)}
+            disabled={cacheClearing}
+          >
+            <XCircle size={15} />
+            <span>{cacheClearing ? "Clearing" : "Clear Cache"}</span>
+          </button>
         </div>
 
         <div className="cache-summary">
@@ -159,6 +170,16 @@ function diagnosticsSourceLabel(health) {
     return "Diagnostics pending";
   }
   return health.diagnostics_source === "health" ? "/health fallback" : "/diagnostics/playback";
+}
+
+function confirmClearCache(onClearMediaCache) {
+  if (!onClearMediaCache) {
+    return;
+  }
+  const confirmed = window.confirm("Clear generated StillFrame posters, backdrops, and subtitle cache files?");
+  if (confirmed) {
+    onClearMediaCache("all");
+  }
 }
 
 function formatCount(value) {
