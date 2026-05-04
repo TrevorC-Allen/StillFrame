@@ -13,6 +13,21 @@ let mainWindow = null;
 let serverProcess = null;
 let backendStdoutFd = null;
 let backendStderrFd = null;
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) {
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.focus();
+  });
+}
 
 function createMenu() {
   const template = [
@@ -202,11 +217,13 @@ async function boot() {
   });
 }
 
-app.whenReady().then(boot).catch((error) => {
-  writeAppLog(`boot error: ${error.stack || error.message}`);
-  dialog.showErrorBox("StillFrame failed to start", error.message);
-  app.quit();
-});
+if (gotSingleInstanceLock) {
+  app.whenReady().then(boot).catch((error) => {
+    writeAppLog(`boot error: ${error.stack || error.message}`);
+    dialog.showErrorBox("StillFrame failed to start", error.message);
+    app.quit();
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
