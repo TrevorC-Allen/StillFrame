@@ -15,7 +15,32 @@ class HealthResponse(BaseModel):
     ffmpeg_path: Optional[str] = None
     full_playback_available: bool = False
     install_hint: Optional[str] = None
+    diagnostics_url: str = "/diagnostics/playback"
     database_path: str
+
+
+class PlaybackToolDiagnostic(BaseModel):
+    present: bool
+    path: Optional[str] = None
+    version: Optional[str] = None
+
+
+class PlaybackDiagnosticIssue(BaseModel):
+    code: str
+    severity: str = Field(pattern="^(info|warning|error)$")
+    message: str
+    action: str
+
+
+class PlaybackDiagnosticsResponse(BaseModel):
+    platform: str
+    python_version: str
+    mpv: PlaybackToolDiagnostic
+    ffmpeg: PlaybackToolDiagnostic
+    browser_preview_supported: bool
+    full_playback_available: bool
+    issues: list[PlaybackDiagnosticIssue] = Field(default_factory=list)
+    install_hint: Optional[str] = None
 
 
 class SourceCreate(BaseModel):
