@@ -36,6 +36,7 @@ const api = {
     method: "POST",
     body: JSON.stringify({})
   }),
+  scanJob: (id) => api.request(`/library/scan/jobs/${encodeURIComponent(id)}`),
   browse: (path) => api.request(`/browse?path=${encodeURIComponent(path)}`),
   subtitles: (mediaPath) => api.request(`/subtitles?media_path=${encodeURIComponent(mediaPath)}`),
   history: () => api.request("/history"),
@@ -74,10 +75,13 @@ const state = {
   health: null,
   seeking: false,
   detailItem: null,
-  subtitleDelay: 0
+  subtitleDelay: 0,
+  scanJob: null,
+  scanPollTimer: null
 };
 
 const PREFS_KEY = "stillframe.mvp.preferences";
+const SCAN_POLL_INTERVAL_MS = 1200;
 
 const ICONS = {
   drive: '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.8A2.8 2.8 0 0 1 7.3 3h9.4a2.8 2.8 0 0 1 2.8 2.8v12.4a2.8 2.8 0 0 1-2.8 2.8H7.3a2.8 2.8 0 0 1-2.8-2.8V5.8Z"/><path d="M8 16.5h8"/><path d="M8 7.5h8"/></svg>',
@@ -103,6 +107,13 @@ const els = {
   sourceForm: document.querySelector("#source-form"),
   chooseFolderButton: document.querySelector("#choose-folder-button"),
   scanLibraryButton: document.querySelector("#scan-library-button"),
+  scanStatus: document.querySelector("#scan-status"),
+  scanStatusTitle: document.querySelector("#scan-status-title"),
+  scanStatusText: document.querySelector("#scan-status-text"),
+  scanItemsIndexed: document.querySelector("#scan-items-indexed"),
+  scanSourcesScanned: document.querySelector("#scan-sources-scanned"),
+  scanSourcesSkipped: document.querySelector("#scan-sources-skipped"),
+  scanError: document.querySelector("#scan-error"),
   sourcePath: document.querySelector("#source-path"),
   refreshSourcesButton: document.querySelector("#refresh-sources-button"),
   sources: document.querySelector("#sources"),
@@ -172,6 +183,7 @@ async function boot() {
   setFolderSortOptions();
   updatePreviewControls();
   updateSubtitleDelayLabel();
+  renderScanStatus();
   await refresh();
 }
 
@@ -419,22 +431,191 @@ async function refresh() {
 }
 
 async function scanLibrary() {
-  const previousLabel = els.scanLibraryButton.querySelector("span")?.textContent || "Scan Library";
-  els.scanLibraryButton.disabled = true;
-  const label = els.scanLibraryButton.querySelector("span");
-  if (label) label.textContent = "Scanning...";
-  await run(async () => {
-    const result = await api.scanLibrary();
-    await refreshLibraryOnly();
-    if (state.mainView === "library") {
-      await refreshLibraryRows();
-      renderBrowser();
+  if (isScanRunning()) {
+    return;
+  }
+
+  stopScanPolling();
+  hideError();
+  state.scanJob = normalizeScanJob({ status: "running" });
+  renderScanStatus();
+  try {
+    const job = await api.scanLibrary();
+    state.scanJob = normalizeScanJob(job);
+    renderScanStatus();
+
+    if (state.scanJob.status === "running") {
+      if (state.scanJob.id == null) {
+        throw new Error("Scan job did not include an id.");
+      }
+      scheduleScanPoll(state.scanJob.id, 250);
+      return;
     }
-    renderShelves();
-    els.playbackNote.textContent = `Indexed ${result.items_indexed} video${result.items_indexed === 1 ? "" : "s"} from ${result.sources_scanned} source${result.sources_scanned === 1 ? "" : "s"}.`;
+
+    await finishScanJob(state.scanJob);
+  } catch (error) {
+    state.scanJob = failedScanJob(error.message);
+    renderScanStatus();
+    showError(error.message);
+  }
+}
+
+function isScanRunning(job = state.scanJob) {
+  return job?.status === "running";
+}
+
+function scheduleScanPoll(jobId, delay = SCAN_POLL_INTERVAL_MS) {
+  stopScanPolling();
+  state.scanPollTimer = window.setTimeout(() => pollScanJob(jobId), delay);
+}
+
+function stopScanPolling() {
+  if (state.scanPollTimer) {
+    window.clearTimeout(state.scanPollTimer);
+    state.scanPollTimer = null;
+  }
+}
+
+async function pollScanJob(jobId) {
+  if (!state.scanJob || state.scanJob.id !== jobId) {
+    return;
+  }
+
+  try {
+    const job = await api.scanJob(jobId);
+    if (!state.scanJob || state.scanJob.id !== jobId) {
+      return;
+    }
+
+    state.scanJob = normalizeScanJob(job);
+    renderScanStatus();
+    if (state.scanJob.status === "running") {
+      scheduleScanPoll(jobId);
+      return;
+    }
+
+    await finishScanJob(state.scanJob);
+  } catch (error) {
+    stopScanPolling();
+    state.scanJob = failedScanJob(error.message);
+    renderScanStatus();
+    showError(error.message);
+  }
+}
+
+async function finishScanJob(job) {
+  stopScanPolling();
+  state.scanJob = normalizeScanJob(job);
+  renderScanStatus();
+
+  if (state.scanJob.status === "failed") {
+    showError(state.scanJob.error || "Library scan failed.");
+    els.playbackNote.textContent = `Scan failed: ${state.scanJob.error || "Unknown error"}.`;
+    return;
+  }
+
+  try {
+    await refreshAfterScanJob();
+    hideError();
+    els.playbackNote.textContent = scanJobSummary(state.scanJob);
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+async function refreshAfterScanJob() {
+  const [sources, history] = await Promise.all([
+    api.sources(),
+    api.history(),
+    refreshLibraryOnly(),
+    refreshFavoritesOnly()
+  ]);
+  state.sources = sources;
+  state.history = history;
+  renderSources();
+  renderHistory();
+  renderShelves();
+
+  if (state.mainView === "library") {
+    await refreshLibraryRows();
+    renderBrowser();
+  }
+}
+
+function normalizeScanJob(job = {}) {
+  return {
+    id: job.id ?? null,
+    status: job.status || "completed",
+    source_id: job.source_id ?? null,
+    limit: job.limit ?? null,
+    items_indexed: Number(job.items_indexed || 0),
+    sources_scanned: Number(job.sources_scanned || 0),
+    sources_skipped: Number(job.sources_skipped || 0),
+    error: job.error || null,
+    started_at: job.started_at || null,
+    completed_at: job.completed_at || null
+  };
+}
+
+function failedScanJob(message) {
+  return normalizeScanJob({
+    ...state.scanJob,
+    status: "failed",
+    error: message,
+    completed_at: new Date().toISOString()
   });
-  if (label) label.textContent = previousLabel;
-  els.scanLibraryButton.disabled = false;
+}
+
+function renderScanStatus() {
+  const job = state.scanJob;
+  const running = isScanRunning(job);
+  const label = els.scanLibraryButton.querySelector("span");
+  els.scanLibraryButton.disabled = running;
+  els.scanLibraryButton.classList.toggle("scanning", running);
+  if (label) {
+    label.textContent = running ? "Scanning..." : "Scan & Generate";
+  }
+
+  if (!job) {
+    els.scanStatus.hidden = true;
+    return;
+  }
+
+  els.scanStatus.hidden = false;
+  els.scanStatus.className = `scan-status ${job.status}`;
+  els.scanStatusTitle.textContent = scanStatusTitle(job);
+  els.scanStatusText.textContent = scanStatusText(job);
+  els.scanItemsIndexed.textContent = String(job.items_indexed);
+  els.scanSourcesScanned.textContent = String(job.sources_scanned);
+  els.scanSourcesSkipped.textContent = String(job.sources_skipped);
+
+  const error = job.error || "";
+  els.scanError.hidden = !error;
+  els.scanError.textContent = error ? `error: ${error}` : "";
+}
+
+function scanStatusTitle(job) {
+  if (job.status === "running") return "Scan running";
+  if (job.status === "failed") return "Scan failed";
+  return "Scan completed";
+}
+
+function scanStatusText(job) {
+  if (job.id == null) {
+    return job.status;
+  }
+  return `${job.status} #${job.id}`;
+}
+
+function scanJobSummary(job) {
+  const items = job.items_indexed;
+  const scanned = job.sources_scanned;
+  const skipped = job.sources_skipped;
+  const itemLabel = items === 1 ? "video" : "videos";
+  const sourceLabel = scanned === 1 ? "source" : "sources";
+  const skippedLabel = skipped === 1 ? "source" : "sources";
+  const skippedNote = skipped ? ` Skipped ${skipped} ${skippedLabel}.` : "";
+  return `Indexed ${items} ${itemLabel} from ${scanned} ${sourceLabel}.${skippedNote}`;
 }
 
 async function setMainView(view) {
