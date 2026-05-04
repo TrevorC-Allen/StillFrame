@@ -42,6 +42,7 @@ export const api = {
       return normalizePlaybackDiagnostics(health, "health");
     }
   },
+  cacheDiagnostics: () => request("/diagnostics/cache"),
   sources: () => request("/sources"),
   addSource: (path, name) => request("/sources", {
     method: "POST",

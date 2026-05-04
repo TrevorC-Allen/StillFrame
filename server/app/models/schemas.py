@@ -43,6 +43,22 @@ class PlaybackDiagnosticsResponse(BaseModel):
     install_hint: Optional[str] = None
 
 
+class CacheBucketDiagnostics(BaseModel):
+    name: str
+    path: str
+    exists: bool
+    files: int
+    bytes: int
+    extensions: dict[str, int] = Field(default_factory=dict)
+
+
+class CacheDiagnosticsResponse(BaseModel):
+    root: str
+    total_files: int
+    total_bytes: int
+    buckets: list[CacheBucketDiagnostics]
+
+
 class SourceCreate(BaseModel):
     path: str
     name: Optional[str] = None

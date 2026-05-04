@@ -2,10 +2,13 @@ import { AlertCircle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
 
 export function SettingsPage({
   health,
+  cacheDiagnostics,
   settings,
   onSaveSetting,
   onRefreshDiagnostics,
-  diagnosticsRefreshing = false
+  diagnosticsRefreshing = false,
+  onRefreshCacheDiagnostics,
+  cacheRefreshing = false
 }) {
   const ready = playbackReady(health);
   const issues = health?.issues || [];
@@ -83,6 +86,43 @@ export function SettingsPage({
           </select>
         </label>
       </div>
+
+      <div className="settings-panel cache-diagnostics-panel">
+        <div className="settings-panel-head">
+          <div>
+            <h2>Media Cache</h2>
+            <span>{cacheDiagnostics?.root || "Cache diagnostics pending"}</span>
+          </div>
+          <button
+            className="text-button diagnostics-refresh-button"
+            type="button"
+            onClick={onRefreshCacheDiagnostics}
+            disabled={cacheRefreshing}
+          >
+            <RefreshCw size={15} className={cacheRefreshing ? "spinning" : ""} />
+            <span>{cacheRefreshing ? "Refreshing" : "Refresh Cache"}</span>
+          </button>
+        </div>
+
+        <div className="cache-summary">
+          <span>Total files <strong>{formatCount(cacheDiagnostics?.total_files)}</strong></span>
+          <span>Storage <strong>{formatBytes(cacheDiagnostics?.total_bytes)}</strong></span>
+        </div>
+
+        <div className="cache-buckets">
+          {(cacheDiagnostics?.buckets || []).map((bucket) => (
+            <div className={bucket.exists ? "cache-bucket" : "cache-bucket missing"} key={bucket.name}>
+              <div>
+                <strong>{bucket.name}</strong>
+                <small>{bucket.path}</small>
+              </div>
+              <span>{formatCount(bucket.files)} files</span>
+              <span>{formatBytes(bucket.bytes)}</span>
+            </div>
+          ))}
+          {!cacheDiagnostics && <span className="runtime-hint">Cache diagnostics are not loaded yet.</span>}
+        </div>
+      </div>
     </section>
   );
 }
@@ -119,4 +159,23 @@ function diagnosticsSourceLabel(health) {
     return "Diagnostics pending";
   }
   return health.diagnostics_source === "health" ? "/health fallback" : "/diagnostics/playback";
+}
+
+function formatCount(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function formatBytes(size) {
+  const value = Number(size || 0);
+  if (!value) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let amount = value;
+  let index = 0;
+  while (amount >= 1024 && index < units.length - 1) {
+    amount /= 1024;
+    index += 1;
+  }
+  return `${amount.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 }

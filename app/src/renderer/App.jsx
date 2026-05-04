@@ -39,6 +39,8 @@ export default function App() {
   const [metadataRefresh, setMetadataRefresh] = useState(null);
   const [metadataRefreshing, setMetadataRefreshing] = useState(false);
   const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
+  const [cacheDiagnostics, setCacheDiagnostics] = useState(null);
+  const [cacheRefreshing, setCacheRefreshing] = useState(false);
   const libraryQueryRef = useRef(DEFAULT_LIBRARY_QUERY);
   const didLoadInitialLibrary = useRef(false);
 
@@ -160,14 +162,16 @@ export default function App() {
 
   async function refreshAll() {
     try {
-      const [healthData, sourceData, mediaData, settingData, scanJobsData] = await Promise.all([
+      const [healthData, cacheData, sourceData, mediaData, settingData, scanJobsData] = await Promise.all([
         api.playbackDiagnostics(),
+        loadCacheDiagnostics(),
         api.sources(),
         loadMediaCollections(libraryQueryRef.current),
         api.settings(),
         api.scanJobs({ limit: 1 })
       ]);
       setHealth(healthData);
+      setCacheDiagnostics(cacheData);
       setSources(sourceData);
       setLibraryItems(mediaData.libraryItems);
       setLibraryFacets(mediaData.libraryFacets);
@@ -404,6 +408,23 @@ export default function App() {
     }
   }
 
+  async function refreshCacheDiagnostics() {
+    if (cacheRefreshing) {
+      return;
+    }
+
+    setError(null);
+    setCacheRefreshing(true);
+    try {
+      const diagnostics = await api.cacheDiagnostics();
+      setCacheDiagnostics(diagnostics);
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setCacheRefreshing(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -491,10 +512,13 @@ export default function App() {
         {view === "settings" && (
           <SettingsPage
             health={health}
+            cacheDiagnostics={cacheDiagnostics}
             settings={settings}
             onSaveSetting={saveSetting}
             onRefreshDiagnostics={refreshPlaybackDiagnostics}
             diagnosticsRefreshing={diagnosticsRefreshing}
+            onRefreshCacheDiagnostics={refreshCacheDiagnostics}
+            cacheRefreshing={cacheRefreshing}
           />
         )}
       </main>
@@ -552,6 +576,14 @@ async function loadMediaCollections(query = DEFAULT_LIBRARY_QUERY) {
 async function loadLibraryFacets() {
   try {
     return await api.libraryFacets();
+  } catch {
+    return null;
+  }
+}
+
+async function loadCacheDiagnostics() {
+  try {
+    return await api.cacheDiagnostics();
   } catch {
     return null;
   }

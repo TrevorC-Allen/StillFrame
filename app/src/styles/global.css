@@ -1271,6 +1271,71 @@ input[type="range"] {
   color: #aab3c2;
 }
 
+.cache-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cache-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #232a35;
+  color: #aab3c2;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cache-summary strong {
+  color: #f5f7fb;
+}
+
+.cache-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cache-bucket {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 90px;
+  gap: 12px;
+  align-items: center;
+  border-top: 1px solid #252a33;
+  padding-top: 10px;
+  color: #c5ccd8;
+  font-size: 13px;
+}
+
+.cache-bucket.missing {
+  color: #8d96a8;
+}
+
+.cache-bucket div {
+  min-width: 0;
+}
+
+.cache-bucket strong,
+.cache-bucket small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cache-bucket small {
+  margin-top: 3px;
+  color: #8d96a8;
+}
+
+.cache-bucket > span {
+  text-align: right;
+}
+
 .setting-row {
   display: flex;
   min-width: 0;

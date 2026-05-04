@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app import state as app_state
+from app.routes import diagnostics as diagnostics_module
 from app.services import metadata_service as metadata_module
 
 
@@ -161,6 +162,33 @@ def test_playback_diagnostics_reads_mocked_tool_versions(monkeypatch) -> None:
     assert payload["issues"] == []
     assert payload["install_hint"] is None
     assert [call[0] for call in calls] == [[paths["mpv"], "--version"], [paths["ffmpeg"], "-version"]]
+
+
+def test_cache_diagnostics_counts_local_media_cache(tmp_path: Path, monkeypatch) -> None:
+    cache_root = tmp_path / "media_cache"
+    posters = cache_root / "posters"
+    subtitles = cache_root / "subtitles"
+    posters.mkdir(parents=True)
+    subtitles.mkdir(parents=True)
+    (posters / "a.jpg").write_bytes(b"poster-a")
+    (posters / "b.svg").write_text("<svg />", encoding="utf-8")
+    (subtitles / "movie.srt").write_text("subtitle", encoding="utf-8")
+    monkeypatch.setattr(diagnostics_module, "MEDIA_CACHE_DIR", cache_root)
+
+    with TestClient(app) as client:
+        response = client.get("/diagnostics/cache")
+
+    payload = response.json()
+    buckets = {bucket["name"]: bucket for bucket in payload["buckets"]}
+
+    assert response.status_code == 200
+    assert payload["root"] == str(cache_root)
+    assert payload["total_files"] == 3
+    assert payload["total_bytes"] == len(b"poster-a") + len("<svg />") + len("subtitle")
+    assert buckets["posters"]["files"] == 2
+    assert buckets["posters"]["extensions"] == {".jpg": 1, ".svg": 1}
+    assert buckets["backdrops"]["exists"] is False
+    assert buckets["subtitles"]["files"] == 1
 
 
 def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
