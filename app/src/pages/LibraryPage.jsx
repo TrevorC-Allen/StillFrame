@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Film, Play, RefreshCw, Search, Star } from "lucide-react";
+import { AlertCircle, CheckCircle2, Film, Play, RefreshCw, Search, Star } from "lucide-react";
 
 import { mediaUrl } from "../api/client.js";
 
@@ -10,7 +10,7 @@ export function LibraryPage({
   onToggleFavorite,
   onScanLibrary,
   scanning,
-  scanSummary
+  scanJob
 }) {
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState("recent");
@@ -66,13 +66,7 @@ export function LibraryPage({
         </button>
       </div>
 
-      {scanSummary && (
-        <div className="scan-note">
-          Indexed {scanSummary.items_indexed} video{scanSummary.items_indexed === 1 ? "" : "s"} from{" "}
-          {scanSummary.sources_scanned} source{scanSummary.sources_scanned === 1 ? "" : "s"}.
-          {scanSummary.sources_skipped ? ` ${scanSummary.sources_skipped} source${scanSummary.sources_skipped === 1 ? "" : "s"} skipped.` : ""}
-        </div>
-      )}
+      <ScanJobStatus job={scanJob} />
 
       <div className="library-layout">
         <div className="library-list">
@@ -107,6 +101,26 @@ export function LibraryPage({
         />
       </div>
     </section>
+  );
+}
+
+function ScanJobStatus({ job }) {
+  if (!job) {
+    return null;
+  }
+
+  const Icon = job.status === "completed" ? CheckCircle2 : job.status === "failed" ? AlertCircle : RefreshCw;
+  return (
+    <div className={`scan-note ${job.status}`}>
+      <span className="scan-note-header">
+        <Icon size={17} className={job.status === "running" ? "spinning" : ""} />
+        <strong>Status: {scanStatusLabel(job.status)}</strong>
+      </span>
+      <span className="scan-stat">{formatCount(job.items_indexed)} indexed</span>
+      <span className="scan-stat">{formatCount(job.sources_scanned)} scanned</span>
+      <span className="scan-stat">{formatCount(job.sources_skipped)} skipped</span>
+      {job.error && <span className="scan-error">Error: {job.error}</span>}
+    </div>
   );
 }
 
@@ -295,4 +309,18 @@ function metadataSourceLabel(source) {
     return "Local";
   }
   return source || "Unknown";
+}
+
+function scanStatusLabel(status) {
+  if (status === "completed") {
+    return "Completed";
+  }
+  if (status === "failed") {
+    return "Failed";
+  }
+  return "Running";
+}
+
+function formatCount(value) {
+  return Number.isFinite(value) ? value : 0;
 }

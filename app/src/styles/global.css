@@ -133,6 +133,46 @@ select:disabled {
   gap: 6px;
 }
 
+.sidebar-scan {
+  display: grid;
+  gap: 5px;
+  margin: -8px 8px 0;
+  border: 1px solid #303746;
+  border-radius: 8px;
+  padding: 9px;
+  background: #10141b;
+  color: #aab3c2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.sidebar-scan-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f5f7fb;
+}
+
+.sidebar-scan.completed {
+  border-color: rgba(50, 185, 126, 0.34);
+  background: rgba(50, 185, 126, 0.09);
+}
+
+.sidebar-scan.running {
+  border-color: rgba(127, 199, 199, 0.34);
+  background: rgba(127, 199, 199, 0.08);
+}
+
+.sidebar-scan.failed {
+  border-color: rgba(226, 117, 85, 0.42);
+  background: rgba(226, 117, 85, 0.1);
+}
+
+.sidebar-scan-error {
+  color: #ffb094;
+  overflow-wrap: anywhere;
+}
+
 .sidebar-empty {
   border: 1px dashed #303746;
   border-radius: 8px;
@@ -351,13 +391,62 @@ h2 {
 }
 
 .scan-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
   min-height: 34px;
-  border: 1px solid rgba(50, 185, 126, 0.28);
+  border: 1px solid #303746;
   border-radius: 8px;
   padding: 8px 10px;
-  background: rgba(50, 185, 126, 0.1);
-  color: #72dfac;
+  background: #10141b;
+  color: #c5ccd8;
   font-size: 13px;
+}
+
+.scan-note.completed {
+  border-color: rgba(50, 185, 126, 0.28);
+  background: rgba(50, 185, 126, 0.1);
+}
+
+.scan-note.running {
+  border-color: rgba(127, 199, 199, 0.32);
+  background: rgba(127, 199, 199, 0.08);
+}
+
+.scan-note.failed {
+  border-color: rgba(226, 117, 85, 0.45);
+  background: rgba(226, 117, 85, 0.12);
+}
+
+.scan-note-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #f5f7fb;
+}
+
+.scan-note.completed .scan-note-header {
+  color: #72dfac;
+}
+
+.scan-note.failed .scan-note-header,
+.scan-error {
+  color: #ffb094;
+}
+
+.scan-stat {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #232a35;
+  color: #aab3c2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.scan-error {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
 }
 
 .library-layout {
