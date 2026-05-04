@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from app.database import Database
@@ -120,6 +121,75 @@ def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
     assert arrival["overview"]
     assert arrival["metadata_source"] in {"local", "tmdb"}
     assert arrival["artwork_url"].startswith("/media/artwork?path=")
+
+
+def test_scan_sources_skips_disconnected_sources(tmp_path: Path) -> None:
+    library, media = make_services(tmp_path)
+    disconnected = tmp_path / "MountedNAS"
+    disconnected.mkdir()
+    library.add_source(str(disconnected))
+    disconnected.rmdir()
+
+    summary = media.scan_sources()
+
+    assert summary["sources_scanned"] == 0
+    assert summary["sources_skipped"] == 1
+    assert summary["items_indexed"] == 0
+
+
+def test_scan_jobs_store_completion_summary(tmp_path: Path) -> None:
+    library, media = make_services(tmp_path)
+    movie = tmp_path / "Arrival.2016.2160p.mkv"
+    movie.write_text("fake video", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+
+    job = library.create_scan_job(source_id=source["id"], limit=10)
+    summary = media.scan_sources(source_id=source["id"], limit=10)
+    completed = library.complete_scan_job(job["id"], summary)
+    jobs = library.list_scan_jobs()
+
+    assert job["status"] == "running"
+    assert completed["status"] == "completed"
+    assert completed["source_id"] == source["id"]
+    assert completed["limit"] == 10
+    assert completed["items_indexed"] == 1
+    assert completed["sources_scanned"] == 1
+    assert completed["sources_skipped"] == 0
+    assert completed["completed_at"] is not None
+    assert jobs[0]["id"] == job["id"]
+
+
+def test_database_initialize_adds_scan_jobs_to_existing_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "legacy.db"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                path TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO sources (name, path, created_at) VALUES (?, ?, ?)",
+            ("Legacy", str(tmp_path), "2025-01-01T00:00:00+00:00"),
+        )
+
+    Database(database_path).initialize()
+
+    with sqlite3.connect(database_path) as connection:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        }
+        source_count = connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+
+    assert "scan_jobs" in tables
+    assert source_count == 1
 
 
 def test_subtitle_matching_and_encoding_detection(tmp_path: Path) -> None:

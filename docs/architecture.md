@@ -8,7 +8,8 @@ StillFrame has three local layers:
 - React renderer shows sources, files, history, favorites, player state, and settings. It only talks to FastAPI.
 - FastAPI owns SQLite, directory browsing, local subtitle matching, playback history, and mpv JSON IPC.
 - Source records include live availability metadata so disconnected mounted paths can be shown without corrupting saved library state.
-- The library index is a local SQLite projection of connected media sources. It is rebuilt by scanning sources and is safe to regenerate.
+- The library index is a local SQLite projection of connected media sources. It is rebuilt by scan jobs and is safe to regenerate.
+- Library scans run as local background jobs by default. Blocking scans are still available through `synchronous=true` or `wait=true` for tests and simple scripts.
 - Metadata enrichment is local-first. Scans generate poster SVGs and file-name-based summaries without network access; TMDb lookup is used only when credentials are provided through environment variables.
 
 ## Playback
@@ -30,6 +31,7 @@ SQLite stores:
 - `playback_states`: progress, selected tracks, and recent history.
 - `favorites`: favorite files.
 - `media_items`: indexed local videos, parsed title metadata, overview, poster path, size, modified time, artwork URL, metadata source, and availability.
+- `scan_jobs`: recent library scan job status, source filter, limit, indexed/skipped counts, errors, and start/completion timestamps.
 - `settings`: simple local preferences.
 
 All data remains local.
