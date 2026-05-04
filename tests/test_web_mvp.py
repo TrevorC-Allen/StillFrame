@@ -74,6 +74,71 @@ def test_web_mvp_home_and_health() -> None:
     assert health.json()["ok"] is True
     assert "full_playback_available" in health.json()
     assert "install_hint" in health.json()
+    assert health.json()["diagnostics_url"] == "/diagnostics/playback"
+
+
+def test_playback_diagnostics_reports_missing_tools(monkeypatch) -> None:
+    monkeypatch.setattr(app_state.shutil, "which", lambda name: None)
+
+    with TestClient(app) as client:
+        diagnostics = client.get("/diagnostics/playback")
+        health = client.get("/health")
+
+    payload = diagnostics.json()
+    issue_codes = {issue["code"] for issue in payload["issues"]}
+
+    assert diagnostics.status_code == 200
+    assert payload["mpv"] == {"present": False, "path": None, "version": None}
+    assert payload["ffmpeg"] == {"present": False, "path": None, "version": None}
+    assert payload["browser_preview_supported"] is True
+    assert payload["full_playback_available"] is False
+    assert issue_codes == {"mpv_missing", "ffmpeg_missing"}
+    assert payload["install_hint"]
+    assert health.status_code == 200
+    assert health.json()["mpv_available"] is False
+    assert health.json()["ffmpeg_available"] is False
+    assert health.json()["full_playback_available"] is False
+    assert health.json()["diagnostics_url"] == "/diagnostics/playback"
+
+
+def test_playback_diagnostics_reads_mocked_tool_versions(monkeypatch) -> None:
+    paths = {"mpv": "/opt/homebrew/bin/mpv", "ffmpeg": "/opt/homebrew/bin/ffmpeg"}
+    calls = []
+
+    def fake_which(name: str) -> str | None:
+        return paths.get(name)
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        assert kwargs["check"] is False
+        assert kwargs["timeout"] <= 1.0
+        if command[0] == paths["mpv"]:
+            return CompletedProcess(command, 0, stdout="mpv 0.39.0 Copyright\nextra\n", stderr="")
+        if command[0] == paths["ffmpeg"]:
+            return CompletedProcess(command, 0, stdout="ffmpeg version 7.1.1 Copyright\nextra\n", stderr="")
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(app_state.shutil, "which", fake_which)
+    monkeypatch.setattr(app_state.subprocess, "run", fake_run)
+
+    with TestClient(app) as client:
+        response = client.get("/diagnostics/playback")
+
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["mpv"] == {"present": True, "path": paths["mpv"], "version": "mpv 0.39.0 Copyright"}
+    assert payload["ffmpeg"] == {
+        "present": True,
+        "path": paths["ffmpeg"],
+        "version": "ffmpeg version 7.1.1 Copyright",
+    }
+    assert payload["full_playback_available"] is True
+    assert payload["issues"] == []
+    assert payload["install_hint"] is None
+    assert [call[0] for call in calls] == [[paths["mpv"], "--version"], [paths["ffmpeg"], "-version"]]
 
 
 def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
