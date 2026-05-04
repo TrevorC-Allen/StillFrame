@@ -10,7 +10,10 @@ export function LibraryPage({
   onToggleFavorite,
   onScanLibrary,
   scanning,
-  scanJob
+  scanJob,
+  onRefreshMetadata,
+  metadataRefreshing,
+  metadataRefresh
 }) {
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState("recent");
@@ -64,9 +67,14 @@ export function LibraryPage({
           <RefreshCw size={17} className={scanning ? "spinning" : ""} />
           <span>{scanning ? "Scanning" : "Scan Library"}</span>
         </button>
+        <button className="text-button metadata-refresh-button" onClick={onRefreshMetadata} disabled={metadataRefreshing}>
+          <RefreshCw size={16} className={metadataRefreshing ? "spinning" : ""} />
+          <span>{metadataRefreshing ? "Refreshing" : "Refresh Metadata"}</span>
+        </button>
       </div>
 
       <ScanJobStatus job={scanJob} />
+      <MetadataRefreshStatus refresh={metadataRefresh} />
 
       <div className="library-layout">
         <div className="library-list">
@@ -120,6 +128,29 @@ function ScanJobStatus({ job }) {
       <span className="scan-stat">{formatCount(job.sources_scanned)} scanned</span>
       <span className="scan-stat">{formatCount(job.sources_skipped)} skipped</span>
       {job.error && <span className="scan-error">Error: {job.error}</span>}
+    </div>
+  );
+}
+
+function MetadataRefreshStatus({ refresh }) {
+  if (!refresh) {
+    return null;
+  }
+
+  const errors = metadataRefreshErrors(refresh);
+  const statusClass = metadataRefreshClass(refresh, errors);
+  const Icon = statusClass === "completed" ? CheckCircle2 : statusClass === "failed" ? AlertCircle : RefreshCw;
+  return (
+    <div className={`scan-note metadata-note ${statusClass}`}>
+      <span className="scan-note-header">
+        <Icon size={17} className={statusClass === "running" ? "spinning" : ""} />
+        <strong>{metadataRefreshLabel(refresh, errors)}</strong>
+      </span>
+      <span className="scan-stat">{formatCount(refresh.items_refreshed)} refreshed</span>
+      <span className="scan-stat">{formatCount(refresh.items_missing)} missing</span>
+      <span className="scan-stat">{formatCount(refresh.items_skipped)} skipped</span>
+      {refresh.limit != null && <span className="scan-stat">limit {refresh.limit}</span>}
+      {errors.length > 0 && <span className="scan-error">Errors: {formatMetadataErrors(errors)}</span>}
     </div>
   );
 }
@@ -319,6 +350,42 @@ function scanStatusLabel(status) {
     return "Failed";
   }
   return "Running";
+}
+
+function metadataRefreshClass(refresh, errors) {
+  if (refresh.status === "failed" || refresh.error || errors.length > 0) {
+    return "failed";
+  }
+  if (refresh.status === "running") {
+    return "running";
+  }
+  return "completed";
+}
+
+function metadataRefreshLabel(refresh, errors) {
+  if (refresh.status === "running") {
+    return "Metadata refreshing";
+  }
+  if (refresh.status === "failed") {
+    return "Metadata refresh failed";
+  }
+  if (errors.length > 0) {
+    return "Metadata refreshed with errors";
+  }
+  return "Metadata refreshed";
+}
+
+function metadataRefreshErrors(refresh) {
+  const errors = refresh.errors || [];
+  const allErrors = refresh.error ? [refresh.error, ...errors] : errors;
+  return [...new Set(allErrors.filter(Boolean))];
+}
+
+function formatMetadataErrors(errors) {
+  if (errors.length <= 3) {
+    return errors.join("; ");
+  }
+  return `${errors.slice(0, 3).join("; ")}; +${errors.length - 3} more`;
 }
 
 function formatCount(value) {

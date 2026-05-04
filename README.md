@@ -89,6 +89,7 @@ The local API listens on `http://127.0.0.1:8765`.
 - `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
 - `GET /library/scan/jobs`
 - `GET /library/scan/jobs/{id}`
+- `POST /library/metadata/refresh`
 - `POST /history/clear`
 - `GET /browse?path=...`
 - `POST /play`

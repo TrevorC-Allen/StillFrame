@@ -35,6 +35,12 @@ def test_web_mvp_home_and_health() -> None:
     assert "scan-sources-scanned" in home.text
     assert "scan-sources-skipped" in home.text
     assert "scan-error" in home.text
+    assert "metadata-refresh-button" in home.text
+    assert "metadata-refresh-status" in home.text
+    assert "metadata-items-refreshed" in home.text
+    assert "metadata-items-missing" in home.text
+    assert "metadata-items-skipped" in home.text
+    assert "metadata-refresh-error" in home.text
     assert "library-shelf" in home.text
     assert "library-filter" in home.text
     assert "library-sort" in home.text
@@ -59,6 +65,8 @@ def test_web_mvp_home_and_health() -> None:
     assert mark.status_code == 200
     assert script.status_code == 200
     assert "/library/scan/jobs/" in script.text
+    assert "/library/metadata/refresh" in script.text
+    assert "refreshMetadata" in script.text
     assert "scheduleScanPoll" in script.text
     assert "Scan running" in script.text
     assert health.status_code == 200
