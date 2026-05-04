@@ -3,7 +3,10 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from app.database import Database
+from app.services import metadata_service as metadata_module
 from app.services.library_service import LibraryService
 from app.services.media_service import MediaService
 from player.subtitle_manager import SubtitleManager
@@ -14,6 +17,11 @@ def make_services(tmp_path: Path) -> tuple[LibraryService, MediaService]:
     database.initialize()
     library = LibraryService(database)
     return library, MediaService(library)
+
+
+def disable_tmdb(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(metadata_module, "TMDB_API_KEY", None)
+    monkeypatch.setattr(metadata_module, "TMDB_BEARER_TOKEN", None)
 
 
 def test_database_sources_history_and_favorites(tmp_path: Path) -> None:
@@ -95,6 +103,108 @@ def test_local_artwork_discovery(tmp_path: Path) -> None:
     enriched = media.enrich_record({"path": str(movie), "title": "Movie"})
     assert enriched["media_available"] is True
     assert enriched["artwork_url"] == f"/media/artwork?path={poster}"
+
+
+@pytest.mark.parametrize(
+    (
+        "relative_path",
+        "expected_title",
+        "expected_year",
+        "expected_quality",
+        "expected_media_type",
+        "expected_overview_parts",
+        "noise_tokens",
+    ),
+    [
+        (
+            "春光乍泄1997/1997-春光乍泄.1997.BD1080p.中文字幕.mp4",
+            "春光乍泄",
+            1997,
+            "1080P",
+            "movie",
+            ("电影《春光乍泄》", "1997 年", "文件版本 1080P"),
+            ("BD1080p", "中文字幕"),
+        ),
+        (
+            "Everything.Everywhere.All.at.Once.2022.1080p.WEB-DL.DDP5.1.Atmos.H.264-FLUX.mkv",
+            "Everything Everywhere All at Once",
+            2022,
+            "1080P",
+            "movie",
+            ("电影《Everything Everywhere All at Once》", "2022 年", "文件版本 1080P"),
+            ("WEB-DL", "DDP", "Atmos", "H.264", "FLUX"),
+        ),
+        (
+            "The.Bear.S01E02.1080p.WEB-DL.x265-GROUP.mkv",
+            "The Bear",
+            None,
+            "1080P",
+            "tv",
+            ("剧集《The Bear》", "S01E02", "文件版本 1080P"),
+            ("S01E02.1080p", "WEB-DL", "x265", "GROUP"),
+        ),
+        (
+            "卧虎藏龙.Crouching.Tiger.Hidden.Dragon.2000.2160p.BluRay.x265.10bit.DTS.国英双语.中英字幕-WiKi.mkv",
+            "卧虎藏龙 Crouching Tiger Hidden Dragon",
+            2000,
+            "2160P",
+            "movie",
+            ("电影《卧虎藏龙 Crouching Tiger Hidden Dragon》", "2000 年", "文件版本 2160P"),
+            ("BluRay", "x265", "DTS", "国英双语", "中英字幕", "WiKi"),
+        ),
+    ],
+)
+def test_local_metadata_cleans_titles_from_filename_and_folder_tokens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+    expected_title: str,
+    expected_year: int | None,
+    expected_quality: str,
+    expected_media_type: str,
+    expected_overview_parts: tuple[str, ...],
+    noise_tokens: tuple[str, ...],
+) -> None:
+    disable_tmdb(monkeypatch)
+    _, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    movie = tmp_path / relative_path
+    movie.parent.mkdir(parents=True, exist_ok=True)
+    movie.write_text("fake video", encoding="utf-8")
+
+    parsed = media.describe_media(movie)
+    metadata = media.metadata.enrich(movie, parsed)
+
+    assert metadata["display_title"] == expected_title
+    assert metadata["title"] == expected_title
+    assert metadata["year"] == expected_year
+    assert metadata["quality"] == expected_quality
+    assert metadata["media_type"] == expected_media_type
+    for expected in expected_overview_parts:
+        assert expected in metadata["overview"]
+    for noise in noise_tokens:
+        assert noise not in metadata["display_title"]
+        assert noise not in metadata["overview"]
+
+
+def test_scan_sources_indexes_cleaned_local_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    movie = tmp_path / "春光乍泄1997" / "1997-春光乍泄.1997.BD1080p.中文字幕.mp4"
+    movie.parent.mkdir()
+    movie.write_text("fake video", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+
+    media.scan_sources(source_id=source["id"])
+    item = library.list_media_items()[0]
+
+    assert item["display_title"] == "春光乍泄"
+    assert item["title"] == "春光乍泄"
+    assert item["year"] == 1997
+    assert "电影《春光乍泄》" in item["overview"]
+    assert "BD1080p" not in item["overview"]
+    assert "中文字幕" not in item["overview"]
 
 
 def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
