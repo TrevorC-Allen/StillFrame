@@ -37,6 +37,10 @@ const api = {
     body: JSON.stringify({})
   }),
   scanJob: (id) => api.request(`/library/scan/jobs/${encodeURIComponent(id)}`),
+  refreshMetadata: (payload = {}) => api.request("/library/metadata/refresh", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }),
   browse: (path) => api.request(`/browse?path=${encodeURIComponent(path)}`),
   subtitles: (mediaPath) => api.request(`/subtitles?media_path=${encodeURIComponent(mediaPath)}`),
   history: () => api.request("/history"),
@@ -77,7 +81,9 @@ const state = {
   detailItem: null,
   subtitleDelay: 0,
   scanJob: null,
-  scanPollTimer: null
+  scanPollTimer: null,
+  metadataRefresh: null,
+  metadataRefreshing: false
 };
 
 const PREFS_KEY = "stillframe.mvp.preferences";
@@ -114,6 +120,15 @@ const els = {
   scanSourcesScanned: document.querySelector("#scan-sources-scanned"),
   scanSourcesSkipped: document.querySelector("#scan-sources-skipped"),
   scanError: document.querySelector("#scan-error"),
+  metadataRefreshButton: document.querySelector("#metadata-refresh-button"),
+  metadataRefreshStatus: document.querySelector("#metadata-refresh-status"),
+  metadataRefreshTitle: document.querySelector("#metadata-refresh-title"),
+  metadataRefreshText: document.querySelector("#metadata-refresh-text"),
+  metadataItemsRefreshed: document.querySelector("#metadata-items-refreshed"),
+  metadataItemsMissing: document.querySelector("#metadata-items-missing"),
+  metadataItemsSkipped: document.querySelector("#metadata-items-skipped"),
+  metadataRefreshLimit: document.querySelector("#metadata-refresh-limit"),
+  metadataRefreshError: document.querySelector("#metadata-refresh-error"),
   sourcePath: document.querySelector("#source-path"),
   refreshSourcesButton: document.querySelector("#refresh-sources-button"),
   sources: document.querySelector("#sources"),
@@ -184,6 +199,7 @@ async function boot() {
   updatePreviewControls();
   updateSubtitleDelayLabel();
   renderScanStatus();
+  renderMetadataRefreshStatus();
   await refresh();
 }
 
@@ -217,6 +233,10 @@ function bindEvents() {
 
   els.scanLibraryButton.addEventListener("click", async () => {
     await scanLibrary();
+  });
+
+  els.metadataRefreshButton.addEventListener("click", async () => {
+    await refreshMetadata();
   });
 
   els.clearHistoryButton.addEventListener("click", async () => {
@@ -616,6 +636,158 @@ function scanJobSummary(job) {
   const skippedLabel = skipped === 1 ? "source" : "sources";
   const skippedNote = skipped ? ` Skipped ${skipped} ${skippedLabel}.` : "";
   return `Indexed ${items} ${itemLabel} from ${scanned} ${sourceLabel}.${skippedNote}`;
+}
+
+async function refreshMetadata() {
+  if (state.metadataRefreshing) {
+    return;
+  }
+
+  hideError();
+  state.metadataRefreshing = true;
+  state.metadataRefresh = normalizeMetadataRefresh({ status: "running" });
+  renderMetadataRefreshStatus();
+
+  try {
+    const summary = await api.refreshMetadata({ force: true });
+    state.metadataRefresh = normalizeMetadataRefresh(summary);
+    renderMetadataRefreshStatus();
+    await refreshAfterMetadataRefresh();
+    hideError();
+    els.playbackNote.textContent = metadataRefreshSummary(state.metadataRefresh);
+  } catch (error) {
+    state.metadataRefresh = failedMetadataRefresh(error.message);
+    renderMetadataRefreshStatus();
+    showError(error.message);
+  } finally {
+    state.metadataRefreshing = false;
+    renderMetadataRefreshStatus();
+  }
+}
+
+async function refreshAfterMetadataRefresh() {
+  const [sources, history] = await Promise.all([
+    api.sources(),
+    api.history(),
+    refreshLibraryOnly(),
+    refreshFavoritesOnly()
+  ]);
+  state.sources = sources;
+  state.history = history;
+  renderSources();
+  renderHistory();
+  renderShelves();
+
+  if (state.mainView === "library") {
+    await refreshLibraryRows();
+    renderBrowser();
+  }
+}
+
+function normalizeMetadataRefresh(summary = {}) {
+  const errors = normalizeMetadataErrors(summary.errors);
+  return {
+    status: summary.status || "completed",
+    items_refreshed: Number(summary.items_refreshed || 0),
+    items_missing: Number(summary.items_missing || 0),
+    items_skipped: Number(summary.items_skipped || 0),
+    errors,
+    error: summary.error || null,
+    limit: summary.limit ?? null
+  };
+}
+
+function normalizeMetadataErrors(errors) {
+  if (!errors) {
+    return [];
+  }
+  const list = Array.isArray(errors) ? errors : [errors];
+  return list
+    .map((entry) => {
+      if (!entry) return "";
+      if (typeof entry === "string") return entry;
+      if (entry.message) return String(entry.message);
+      if (entry.error) return String(entry.error);
+      try {
+        return JSON.stringify(entry);
+      } catch {
+        return String(entry);
+      }
+    })
+    .filter(Boolean);
+}
+
+function failedMetadataRefresh(message) {
+  return normalizeMetadataRefresh({
+    status: "failed",
+    error: message,
+    errors: [message]
+  });
+}
+
+function renderMetadataRefreshStatus() {
+  const refresh = state.metadataRefresh;
+  const running = state.metadataRefreshing || refresh?.status === "running";
+  const label = els.metadataRefreshButton.querySelector("span");
+  els.metadataRefreshButton.disabled = running;
+  els.metadataRefreshButton.classList.toggle("refreshing", running);
+  if (label) {
+    label.textContent = running ? "Refreshing..." : "Rebuild Metadata";
+  }
+
+  if (!refresh) {
+    els.metadataRefreshStatus.hidden = true;
+    return;
+  }
+
+  els.metadataRefreshStatus.hidden = false;
+  els.metadataRefreshStatus.className = `scan-status metadata-status ${metadataRefreshClass(refresh)}`;
+  els.metadataRefreshTitle.textContent = metadataRefreshTitle(refresh);
+  els.metadataRefreshText.textContent = metadataRefreshText(refresh);
+  els.metadataItemsRefreshed.textContent = String(refresh.items_refreshed);
+  els.metadataItemsMissing.textContent = String(refresh.items_missing);
+  els.metadataItemsSkipped.textContent = String(refresh.items_skipped);
+  els.metadataRefreshLimit.textContent = refresh.limit == null ? "-" : String(refresh.limit);
+
+  const error = metadataRefreshErrorText(refresh);
+  els.metadataRefreshError.hidden = !error;
+  els.metadataRefreshError.textContent = error ? `error: ${error}` : "";
+}
+
+function metadataRefreshClass(refresh) {
+  if (refresh.status === "failed" || refresh.error || refresh.errors.length > 0) return "failed";
+  if (refresh.status === "running") return "running";
+  return "completed";
+}
+
+function metadataRefreshTitle(refresh) {
+  if (refresh.status === "running") return "Metadata refresh running";
+  if (refresh.status === "failed") return "Metadata refresh failed";
+  if (refresh.errors.length > 0) return "Metadata refresh completed with errors";
+  return "Metadata refresh completed";
+}
+
+function metadataRefreshText(refresh) {
+  if (refresh.status === "running") return "running";
+  if (refresh.status === "failed") return "failed";
+  return refresh.limit == null ? "completed" : `limit ${refresh.limit}`;
+}
+
+function metadataRefreshErrorText(refresh) {
+  const errors = refresh.error ? [refresh.error, ...refresh.errors] : refresh.errors;
+  const uniqueErrors = [...new Set(errors)];
+  if (uniqueErrors.length <= 3) return uniqueErrors.join("; ");
+  return `${uniqueErrors.slice(0, 3).join("; ")}; +${uniqueErrors.length - 3} more`;
+}
+
+function metadataRefreshSummary(refresh) {
+  const refreshed = refresh.items_refreshed;
+  const missing = refresh.items_missing;
+  const skipped = refresh.items_skipped;
+  const itemLabel = refreshed === 1 ? "item" : "items";
+  const limitNote = refresh.limit == null ? "" : ` Limit ${refresh.limit}.`;
+  const errorNote = refresh.errors.length ? ` Errors ${refresh.errors.length}.` : "";
+  return `Refreshed metadata for ${refreshed} ${itemLabel}. Missing ${missing}. Skipped ${skipped}.${limitNote}${errorNote}`;
 }
 
 async function setMainView(view) {

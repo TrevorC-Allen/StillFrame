@@ -390,6 +390,11 @@ h2 {
   white-space: nowrap;
 }
 
+.library-toolbar .metadata-refresh-button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .scan-note {
   display: flex;
   flex-wrap: wrap;

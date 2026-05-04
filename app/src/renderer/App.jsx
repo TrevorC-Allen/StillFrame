@@ -24,6 +24,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [scanJob, setScanJob] = useState(null);
   const [scanStarting, setScanStarting] = useState(false);
+  const [metadataRefresh, setMetadataRefresh] = useState(null);
+  const [metadataRefreshing, setMetadataRefreshing] = useState(false);
 
   const favoritePaths = useMemo(
     () => new Set(favorites.map((favorite) => favorite.path)),
@@ -289,6 +291,34 @@ export default function App() {
     }
   }
 
+  async function refreshLibraryMetadata() {
+    if (metadataRefreshing) {
+      return;
+    }
+
+    setError(null);
+    setMetadataRefreshing(true);
+    setMetadataRefresh(metadataRefreshFromSummary({ status: "running" }));
+    try {
+      const result = await api.refreshMetadata({ force: true });
+      const completedRefresh = metadataRefreshFromSummary(result);
+      const [sourceData, mediaData] = await Promise.all([
+        api.sources(),
+        loadMediaCollections()
+      ]);
+      setSources(sourceData);
+      setLibraryItems(mediaData.libraryItems);
+      setHistory(mediaData.history);
+      setFavorites(mediaData.favorites);
+      setMetadataRefresh(completedRefresh);
+    } catch (caught) {
+      setMetadataRefresh(failedMetadataRefresh(caught.message));
+      setError(caught.message);
+    } finally {
+      setMetadataRefreshing(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -352,6 +382,9 @@ export default function App() {
             onScanLibrary={scanLibrary}
             scanning={scanning}
             scanJob={scanJob}
+            onRefreshMetadata={refreshLibraryMetadata}
+            metadataRefreshing={metadataRefreshing}
+            metadataRefresh={metadataRefresh}
           />
         )}
 
@@ -440,4 +473,53 @@ function completedScanJobFromSummary(summary) {
     started_at: data.started_at ?? null,
     completed_at: data.completed_at ?? new Date().toISOString()
   };
+}
+
+function metadataRefreshFromSummary(summary) {
+  const data = summary || {};
+  return {
+    status: data.status || "completed",
+    items_refreshed: Number(data.items_refreshed || 0),
+    items_missing: Number(data.items_missing || 0),
+    items_skipped: Number(data.items_skipped || 0),
+    errors: normalizeMetadataErrors(data.errors),
+    error: data.error || null,
+    limit: data.limit ?? null
+  };
+}
+
+function failedMetadataRefresh(message) {
+  return metadataRefreshFromSummary({
+    status: "failed",
+    error: message,
+    errors: [message]
+  });
+}
+
+function normalizeMetadataErrors(errors) {
+  if (!errors) {
+    return [];
+  }
+  const list = Array.isArray(errors) ? errors : [errors];
+  return list
+    .map((entry) => {
+      if (!entry) {
+        return "";
+      }
+      if (typeof entry === "string") {
+        return entry;
+      }
+      if (entry.message) {
+        return String(entry.message);
+      }
+      if (entry.error) {
+        return String(entry.error);
+      }
+      try {
+        return JSON.stringify(entry);
+      } catch {
+        return String(entry);
+      }
+    })
+    .filter(Boolean);
 }

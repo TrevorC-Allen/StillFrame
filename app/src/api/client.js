@@ -50,6 +50,10 @@ export const api = {
     method: "POST",
     body: JSON.stringify(payload)
   }),
+  refreshMetadata: (payload = {}) => request("/library/metadata/refresh", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }),
   scanJobs: ({ limit = 20 } = {}) => {
     const params = new URLSearchParams({
       limit: String(limit)
