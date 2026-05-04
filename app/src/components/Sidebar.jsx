@@ -1,4 +1,4 @@
-import { AlertTriangle, Clock, FolderOpen, Plus, Settings, Star } from "lucide-react";
+import { AlertTriangle, Clock, FolderOpen, Library, Plus, RefreshCw, Settings, Star } from "lucide-react";
 
 export function Sidebar({
   sources,
@@ -7,7 +7,8 @@ export function Sidebar({
   onAddFolder,
   onOpenSource,
   onViewChange,
-  onScanLibrary
+  onScanLibrary,
+  scanning
 }) {
   return (
     <aside className="sidebar">
@@ -23,7 +24,7 @@ export function Sidebar({
           className={currentView === "index" ? "nav-item active" : "nav-item"}
           onClick={() => onViewChange("index")}
         >
-          <FolderOpen size={18} />
+          <Library size={18} />
           <span>Library</span>
         </button>
         <button
@@ -52,8 +53,8 @@ export function Sidebar({
       <div className="source-header">
         <span>Sources</span>
         <span className="source-tools">
-          <button className="icon-button" onClick={onScanLibrary} title="Scan library">
-            <FolderOpen size={17} />
+          <button className="icon-button" onClick={onScanLibrary} disabled={scanning} title="Scan library">
+            <RefreshCw size={17} className={scanning ? "spinning" : ""} />
           </button>
           <button className="icon-button" onClick={onAddFolder} title="Add folder">
             <Plus size={17} />

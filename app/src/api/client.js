@@ -33,10 +33,22 @@ export const api = {
     method: "POST",
     body: JSON.stringify({ path, name })
   }),
-  library: () => request("/library?limit=100&sort=recent"),
+  library: ({ search = "", sort = "recent", limit = 200, includeUnavailable = true } = {}) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      sort
+    });
+    if (search.trim()) {
+      params.set("search", search.trim());
+    }
+    if (includeUnavailable) {
+      params.set("include_unavailable", "true");
+    }
+    return request(`/library?${params.toString()}`);
+  },
   scanLibrary: () => request("/library/scan", {
     method: "POST",
-    body: JSON.stringify({})
+    body: JSON.stringify({ synchronous: true })
   }),
   browse: (path) => request(`/browse?path=${encodeURIComponent(path)}`),
   play: (path, options = {}) => request("/play", {
@@ -62,3 +74,13 @@ export const api = {
     body: JSON.stringify({ key, value })
   })
 };
+
+export function mediaUrl(path) {
+  if (!path) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  return `${SERVER_URL}${path}`;
+}
