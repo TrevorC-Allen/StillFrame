@@ -234,6 +234,91 @@ def test_web_mvp_source_browse_stream_and_progress(tmp_path: Path) -> None:
     assert cleared_history_response.json() == []
 
 
+def test_library_facets_and_filter_query_endpoint(tmp_path: Path) -> None:
+    app_state.database.path = tmp_path / "library-facets.db"
+    app_state.initialize()
+    source_root = tmp_path / "SourceA"
+    offline_root = tmp_path / "SourceB"
+    source_root.mkdir()
+    offline_root.mkdir()
+    source = app_state.library_service.add_source(str(source_root), "Source A")
+    offline_source = app_state.library_service.add_source(str(offline_root), "Source B")
+    favorite_movie = source_root / "Arrival.2024.1080p.mkv"
+    plain_movie = source_root / "Dune.2024.1080p.mkv"
+    archived_movie = offline_root / "Archived.2024.1080p.mkv"
+    for media_path in (favorite_movie, plain_movie, archived_movie):
+        media_path.write_bytes(b"fake video")
+
+    def indexed_item(media_path: Path, source_record: dict, title: str, available: int) -> dict:
+        stat = media_path.stat()
+        return {
+            "path": str(media_path.resolve()),
+            "source_id": source_record["id"],
+            "source_path": source_record["path"],
+            "name": media_path.name,
+            "title": title,
+            "display_title": title,
+            "year": 2024,
+            "season": None,
+            "episode": None,
+            "quality": "1080P",
+            "size": stat.st_size,
+            "modified_at": stat.st_mtime,
+            "artwork_url": None,
+            "overview": "local overview",
+            "poster_path": None,
+            "backdrop_url": None,
+            "tmdb_id": None,
+            "media_type": "movie",
+            "metadata_source": "local",
+            "metadata_updated_at": "2025-01-01T00:00:00+00:00",
+            "available": available,
+            "last_seen_at": "2025-01-01T00:00:00+00:00",
+        }
+
+    app_state.library_service.upsert_media_items(
+        [
+            indexed_item(favorite_movie, source, "Arrival", 1),
+            indexed_item(plain_movie, source, "Dune", 1),
+            indexed_item(archived_movie, offline_source, "Archived", 0),
+        ]
+    )
+    app_state.library_service.set_favorite(str(favorite_movie.resolve()), True, "Arrival")
+    app_state.library_service.set_favorite(str(archived_movie.resolve()), True, "Archived")
+    archived_movie.unlink()
+    offline_root.rmdir()
+
+    with TestClient(app) as client:
+        facets_response = client.get("/library/facets")
+        filtered_response = client.get(
+            "/library",
+            params={
+                "media_type": "movie",
+                "year": 2024,
+                "quality": "1080P",
+                "source_id": source["id"],
+                "favorite": True,
+            },
+        )
+        offline_response = client.get("/library", params={"available": False, "favorite": True})
+
+    facets = facets_response.json()
+    assert facets_response.status_code == 200
+    assert facets["total"] == 3
+    assert facets["available"] == 2
+    assert facets["offline"] == 1
+    assert facets["favorites"] == 2
+    assert facets["media_types"] == [{"value": "movie", "label": "Movie", "count": 3}]
+    assert facets["years"] == [{"value": 2024, "count": 3}]
+    assert facets["qualities"] == [{"value": "1080P", "count": 3}]
+    assert {source["name"]: source["count"] for source in facets["sources"]} == {"Source A": 2, "Source B": 1}
+    assert next(source for source in facets["sources"] if source["name"] == "Source B")["available"] is False
+    assert filtered_response.status_code == 200
+    assert [item["title"] for item in filtered_response.json()["items"]] == ["Arrival"]
+    assert offline_response.status_code == 200
+    assert [item["title"] for item in offline_response.json()["items"]] == ["Archived"]
+
+
 def test_media_stream_error_responses(tmp_path: Path) -> None:
     media = tmp_path / "Sample.mp4"
     notes = tmp_path / "notes.txt"

@@ -31,6 +31,10 @@ def seed_indexed_media_item(
     source: dict,
     *,
     title: str = "Stale Title",
+    year: int | None = None,
+    quality: str | None = None,
+    media_type: str | None = None,
+    available: int = 1,
 ) -> None:
     stat = media_path.stat()
     library.upsert_media_items(
@@ -42,10 +46,10 @@ def seed_indexed_media_item(
                 "name": media_path.name,
                 "title": title,
                 "display_title": title,
-                "year": None,
+                "year": year,
                 "season": None,
                 "episode": None,
-                "quality": None,
+                "quality": quality,
                 "size": stat.st_size,
                 "modified_at": stat.st_mtime,
                 "artwork_url": None,
@@ -53,10 +57,10 @@ def seed_indexed_media_item(
                 "poster_path": None,
                 "backdrop_url": None,
                 "tmdb_id": None,
-                "media_type": None,
+                "media_type": media_type,
                 "metadata_source": "stale",
                 "metadata_updated_at": "2025-01-01T00:00:00+00:00",
-                "available": 1,
+                "available": available,
                 "last_seen_at": "2025-01-01T00:00:00+00:00",
             }
         ]
@@ -278,6 +282,144 @@ def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
     assert arrival["overview"]
     assert arrival["metadata_source"] in {"local", "tmdb"}
     assert arrival["artwork_url"].startswith("/media/artwork?path=")
+
+
+def test_library_facets_count_media_statuses_and_sources(tmp_path: Path) -> None:
+    library, _ = make_services(tmp_path)
+    source_root = tmp_path / "SourceA"
+    offline_root = tmp_path / "SourceB"
+    source_root.mkdir()
+    offline_root.mkdir()
+    source = library.add_source(str(source_root), "Source A")
+    offline_source = library.add_source(str(offline_root), "Source B")
+    arrival = source_root / "Arrival.2024.1080p.mkv"
+    episode = source_root / "Show.S01E02.2025.2160p.mp4"
+    archived = offline_root / "Archived.2024.1080p.mkv"
+    arrival.write_text("fake video", encoding="utf-8")
+    episode.write_text("fake video", encoding="utf-8")
+    archived.write_text("fake video", encoding="utf-8")
+    seed_indexed_media_item(
+        library,
+        arrival,
+        source,
+        title="Arrival",
+        year=2024,
+        quality="1080P",
+        media_type="movie",
+    )
+    seed_indexed_media_item(
+        library,
+        episode,
+        source,
+        title="Show",
+        year=2025,
+        quality="2160P",
+        media_type="tv",
+    )
+    seed_indexed_media_item(
+        library,
+        archived,
+        offline_source,
+        title="Archived",
+        year=2024,
+        quality="1080P",
+        media_type="movie",
+        available=0,
+    )
+    library.set_favorite(str(arrival.resolve()), True, "Arrival")
+    library.set_favorite(str(archived.resolve()), True, "Archived")
+    archived.unlink()
+    offline_root.rmdir()
+
+    facets = library.library_facets()
+
+    assert facets["total"] == 3
+    assert facets["available"] == 2
+    assert facets["offline"] == 1
+    assert facets["favorites"] == 2
+    assert facets["media_types"] == [
+        {"value": "movie", "label": "Movie", "count": 2},
+        {"value": "tv", "label": "TV", "count": 1},
+    ]
+    assert facets["years"] == [{"value": 2025, "count": 1}, {"value": 2024, "count": 2}]
+    assert facets["qualities"] == [
+        {"value": "1080P", "count": 2},
+        {"value": "2160P", "count": 1},
+    ]
+    sources = {source["name"]: source for source in facets["sources"]}
+    assert sources["Source A"]["count"] == 2
+    assert sources["Source A"]["available"] is True
+    assert sources["Source B"]["count"] == 1
+    assert sources["Source B"]["available"] is False
+
+
+def test_list_media_items_filters_by_library_facets(tmp_path: Path) -> None:
+    library, _ = make_services(tmp_path)
+    source_root = tmp_path / "SourceA"
+    other_root = tmp_path / "SourceB"
+    source_root.mkdir()
+    other_root.mkdir()
+    source = library.add_source(str(source_root), "Source A")
+    other_source = library.add_source(str(other_root), "Source B")
+    favorite_movie = source_root / "Arrival.2024.1080p.mkv"
+    plain_movie = source_root / "Dune.2024.1080p.mkv"
+    episode = other_root / "Show.S01E02.2025.2160p.mp4"
+    offline_movie = other_root / "Offline.2024.1080p.mkv"
+    for media_path in (favorite_movie, plain_movie, episode, offline_movie):
+        media_path.write_text("fake video", encoding="utf-8")
+    seed_indexed_media_item(
+        library,
+        favorite_movie,
+        source,
+        title="Arrival",
+        year=2024,
+        quality="1080P",
+        media_type="movie",
+    )
+    seed_indexed_media_item(
+        library,
+        plain_movie,
+        source,
+        title="Dune",
+        year=2024,
+        quality="1080P",
+        media_type="movie",
+    )
+    seed_indexed_media_item(
+        library,
+        episode,
+        other_source,
+        title="Show",
+        year=2025,
+        quality="2160P",
+        media_type="tv",
+    )
+    seed_indexed_media_item(
+        library,
+        offline_movie,
+        other_source,
+        title="Offline",
+        year=2024,
+        quality="1080P",
+        media_type="movie",
+        available=0,
+    )
+    library.set_favorite(str(favorite_movie.resolve()), True, "Arrival")
+    library.set_favorite(str(offline_movie.resolve()), True, "Offline")
+
+    favorite_results = library.list_media_items(
+        media_type="movie",
+        year=2024,
+        quality="1080P",
+        source_id=source["id"],
+        favorite=True,
+    )
+    offline_results = library.list_media_items(available=False, favorite=True)
+    non_favorites = library.list_media_items(favorite=False, sort="title")
+
+    assert [item["title"] for item in favorite_results] == ["Arrival"]
+    assert [item["title"] for item in offline_results] == ["Offline"]
+    assert [item["title"] for item in non_favorites] == ["Dune", "Show"]
 
 
 def test_scan_sources_skips_disconnected_sources(tmp_path: Path) -> None:

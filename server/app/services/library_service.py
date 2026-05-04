@@ -7,6 +7,13 @@ from typing import Any, Optional
 from app.database import Database
 
 
+MEDIA_TYPE_LABELS = {
+    "movie": "Movie",
+    "tv": "TV",
+    "unknown": "Unknown",
+}
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -260,6 +267,12 @@ class LibraryService:
         limit: int = 100,
         sort: str = "title",
         include_unavailable: bool = False,
+        media_type: Optional[str] = None,
+        year: Optional[int] = None,
+        quality: Optional[str] = None,
+        source_id: Optional[int] = None,
+        favorite: Optional[bool] = None,
+        available: Optional[bool] = None,
     ) -> list[dict[str, Any]]:
         sort_sql = {
             "title": "LOWER(media_items.title) ASC, media_items.name ASC",
@@ -268,24 +281,16 @@ class LibraryService:
             "year": "media_items.year DESC, LOWER(media_items.title) ASC",
         }.get(sort, "LOWER(media_items.title) ASC, media_items.name ASC")
 
-        clauses = []
-        params: list[Any] = []
-        if not include_unavailable:
-            clauses.append("media_items.available = 1")
-        if search:
-            clauses.append(
-                """
-                (
-                    media_items.title LIKE ?
-                    OR media_items.display_title LIKE ?
-                    OR media_items.name LIKE ?
-                    OR media_items.source_path LIKE ?
-                )
-                """
-            )
-            needle = f"%{search}%"
-            params.extend([needle, needle, needle, needle])
-
+        clauses, params = self._library_filter_clauses(
+            search=search,
+            include_unavailable=include_unavailable,
+            media_type=media_type,
+            year=year,
+            quality=quality,
+            source_id=source_id,
+            favorite=favorite,
+            available=available,
+        )
         where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
 
@@ -308,6 +313,149 @@ class LibraryService:
                 params,
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def library_facets(self) -> dict[str, Any]:
+        with self.database.connect() as connection:
+            stats = connection.execute(
+                """
+                SELECT
+                    COUNT(media_items.path) AS total,
+                    COALESCE(SUM(CASE WHEN media_items.available = 1 THEN 1 ELSE 0 END), 0) AS available,
+                    COALESCE(SUM(CASE WHEN media_items.available = 0 THEN 1 ELSE 0 END), 0) AS offline,
+                    COALESCE(SUM(CASE WHEN favorites.path IS NULL THEN 0 ELSE 1 END), 0) AS favorites
+                FROM media_items
+                LEFT JOIN favorites ON favorites.path = media_items.path
+                """
+            ).fetchone()
+            media_type_rows = connection.execute(
+                """
+                SELECT
+                    LOWER(COALESCE(NULLIF(TRIM(media_type), ''), 'unknown')) AS value,
+                    COUNT(*) AS count
+                FROM media_items
+                GROUP BY value
+                ORDER BY count DESC, value ASC
+                """
+            ).fetchall()
+            year_rows = connection.execute(
+                """
+                SELECT year AS value, COUNT(*) AS count
+                FROM media_items
+                WHERE year IS NOT NULL
+                GROUP BY year
+                ORDER BY year DESC
+                """
+            ).fetchall()
+            quality_rows = connection.execute(
+                """
+                SELECT UPPER(TRIM(quality)) AS value, COUNT(*) AS count
+                FROM media_items
+                WHERE quality IS NOT NULL AND TRIM(quality) != ''
+                GROUP BY value
+                ORDER BY count DESC, value COLLATE NOCASE ASC
+                """
+            ).fetchall()
+            source_rows = connection.execute(
+                """
+                SELECT
+                    sources.id,
+                    sources.name,
+                    sources.path,
+                    sources.created_at,
+                    COUNT(media_items.path) AS count
+                FROM sources
+                LEFT JOIN media_items ON media_items.source_id = sources.id
+                GROUP BY sources.id, sources.name, sources.path, sources.created_at
+                ORDER BY sources.name COLLATE NOCASE ASC
+                """
+            ).fetchall()
+
+        return {
+            "total": int(stats["total"] or 0),
+            "available": int(stats["available"] or 0),
+            "offline": int(stats["offline"] or 0),
+            "favorites": int(stats["favorites"] or 0),
+            "media_types": [
+                {
+                    "value": row["value"],
+                    "label": self._media_type_label(row["value"]),
+                    "count": int(row["count"] or 0),
+                }
+                for row in media_type_rows
+            ],
+            "years": [
+                {"value": int(row["value"]), "count": int(row["count"] or 0)}
+                for row in year_rows
+            ],
+            "qualities": [
+                {"value": row["value"], "count": int(row["count"] or 0)}
+                for row in quality_rows
+            ],
+            "sources": [
+                {
+                    "id": int(source["id"]),
+                    "name": source["name"],
+                    "path": source["path"],
+                    "count": int(source["count"] or 0),
+                    "available": bool(source["available"]),
+                }
+                for source in (self._with_source_status(dict(row)) for row in source_rows)
+            ],
+        }
+
+    def _library_filter_clauses(
+        self,
+        *,
+        search: Optional[str] = None,
+        include_unavailable: bool = False,
+        media_type: Optional[str] = None,
+        year: Optional[int] = None,
+        quality: Optional[str] = None,
+        source_id: Optional[int] = None,
+        favorite: Optional[bool] = None,
+        available: Optional[bool] = None,
+    ) -> tuple[list[str], list[Any]]:
+        clauses = []
+        params: list[Any] = []
+        if available is not None:
+            clauses.append("media_items.available = ?")
+            params.append(1 if available else 0)
+        elif not include_unavailable:
+            clauses.append("media_items.available = 1")
+        if search:
+            clauses.append(
+                """
+                (
+                    media_items.title LIKE ?
+                    OR media_items.display_title LIKE ?
+                    OR media_items.name LIKE ?
+                    OR media_items.source_path LIKE ?
+                )
+                """
+            )
+            needle = f"%{search}%"
+            params.extend([needle, needle, needle, needle])
+        if media_type:
+            if media_type.lower() == "unknown":
+                clauses.append("(media_items.media_type IS NULL OR TRIM(media_items.media_type) = '')")
+            else:
+                clauses.append("LOWER(media_items.media_type) = LOWER(?)")
+                params.append(media_type)
+        if year is not None:
+            clauses.append("media_items.year = ?")
+            params.append(year)
+        if quality:
+            clauses.append("LOWER(media_items.quality) = LOWER(?)")
+            params.append(quality)
+        if source_id is not None:
+            clauses.append("media_items.source_id = ?")
+            params.append(source_id)
+        if favorite is not None:
+            clauses.append("favorites.path IS NOT NULL" if favorite else "favorites.path IS NULL")
+        return clauses, params
+
+    def _media_type_label(self, value: str) -> str:
+        return MEDIA_TYPE_LABELS.get(value, value.replace("_", " ").title())
 
     def list_media_items_for_refresh(
         self,

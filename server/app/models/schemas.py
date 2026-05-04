@@ -178,6 +178,41 @@ class LibraryMetadataRefreshResponse(BaseModel):
     limit: int
 
 
+class LibraryFacetOption(BaseModel):
+    value: str
+    label: Optional[str] = None
+    count: int = Field(ge=0)
+
+
+class LibraryValueFacetOption(BaseModel):
+    value: str
+    count: int = Field(ge=0)
+
+
+class LibraryYearFacetOption(BaseModel):
+    value: int
+    count: int = Field(ge=0)
+
+
+class LibrarySourceFacetOption(BaseModel):
+    id: int
+    name: str
+    path: str
+    count: int = Field(ge=0)
+    available: bool = True
+
+
+class LibraryFacetsResponse(BaseModel):
+    total: int = Field(ge=0)
+    available: int = Field(ge=0)
+    offline: int = Field(ge=0)
+    favorites: int = Field(ge=0)
+    media_types: list[LibraryFacetOption] = Field(default_factory=list)
+    years: list[LibraryYearFacetOption] = Field(default_factory=list)
+    qualities: list[LibraryValueFacetOption] = Field(default_factory=list)
+    sources: list[LibrarySourceFacetOption] = Field(default_factory=list)
+
+
 class LibraryScanJob(BaseModel):
     id: int
     status: str = Field(pattern="^(running|completed|failed)$")
