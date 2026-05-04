@@ -26,6 +26,7 @@ export default function App() {
   const [scanStarting, setScanStarting] = useState(false);
   const [metadataRefresh, setMetadataRefresh] = useState(null);
   const [metadataRefreshing, setMetadataRefreshing] = useState(false);
+  const [diagnosticsRefreshing, setDiagnosticsRefreshing] = useState(false);
 
   const favoritePaths = useMemo(
     () => new Set(favorites.map((favorite) => favorite.path)),
@@ -106,7 +107,7 @@ export default function App() {
   async function refreshAll() {
     try {
       const [healthData, sourceData, libraryData, historyData, favoriteData, settingData, scanJobsData] = await Promise.all([
-        api.health(),
+        api.playbackDiagnostics(),
         api.sources(),
         api.library(),
         api.history(),
@@ -319,6 +320,23 @@ export default function App() {
     }
   }
 
+  async function refreshPlaybackDiagnostics() {
+    if (diagnosticsRefreshing) {
+      return;
+    }
+
+    setError(null);
+    setDiagnosticsRefreshing(true);
+    try {
+      const diagnostics = await api.playbackDiagnostics();
+      setHealth(diagnostics);
+    } catch (caught) {
+      setError(caught.message);
+    } finally {
+      setDiagnosticsRefreshing(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -403,6 +421,8 @@ export default function App() {
             health={health}
             settings={settings}
             onSaveSetting={saveSetting}
+            onRefreshDiagnostics={refreshPlaybackDiagnostics}
+            diagnosticsRefreshing={diagnosticsRefreshing}
           />
         )}
       </main>

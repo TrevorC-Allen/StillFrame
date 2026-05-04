@@ -82,7 +82,7 @@ The Electron shell includes an indexed Library view with background scan job sta
 The local API listens on `http://127.0.0.1:8765`.
 
 - `GET /health`
-- `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg path/version, preview support, and actionable playback issues.
+- `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg presence, paths, versions, preview support, playback issues, and install hints.
 - `GET /sources`
 - `POST /sources`
 - `GET /library`
