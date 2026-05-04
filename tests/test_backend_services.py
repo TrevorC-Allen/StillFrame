@@ -311,6 +311,29 @@ def test_scan_sources_indexes_media_items(tmp_path: Path) -> None:
     assert arrival["artwork_url"].startswith("/media/artwork?path=")
 
 
+def test_scan_sources_persists_generated_episode_and_quality_fields(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    disable_tmdb(monkeypatch)
+    library, media = make_services(tmp_path)
+    media.metadata.poster_dir = tmp_path / "posters"
+    episode_dir = tmp_path / "漫长的季节" / "第 1 季"
+    episode_dir.mkdir(parents=True)
+    episode = episode_dir / "漫长的季节.第1季第2集.1080p.WEB-DL.mkv"
+    episode.write_text("fake video", encoding="utf-8")
+    source = library.add_source(str(tmp_path))
+
+    media.scan_sources(source_id=source["id"])
+    item = library.list_media_items()[0]
+
+    assert item["display_title"] == "漫长的季节"
+    assert item["media_type"] == "tv"
+    assert item["season"] == 1
+    assert item["episode"] == 2
+    assert item["quality"] == "1080P"
+
+
 def test_library_facets_count_media_statuses_and_sources(tmp_path: Path) -> None:
     library, _ = make_services(tmp_path)
     source_root = tmp_path / "SourceA"

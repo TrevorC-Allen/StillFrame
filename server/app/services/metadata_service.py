@@ -420,7 +420,10 @@ class MetadataService:
         normalized = re.sub(r"\s+", " ", title.strip().lower())
         if normalized in GENERIC_DIRECTORY_TITLES:
             return True
-        return bool(re.fullmatch(r"(?:season|series|s)\s*\d{1,2}", normalized))
+        return bool(
+            re.fullmatch(r"(?:season|series|s)\s*\d{1,2}", normalized)
+            or re.fullmatch(r"第\s*\d{1,2}\s*季", normalized)
+        )
 
     def _titles_overlap(self, left: str, right: str) -> bool:
         left_compact = self._compact_title(left)
