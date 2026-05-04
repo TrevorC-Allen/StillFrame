@@ -63,6 +63,41 @@ public struct LibraryResponse: Codable, Sendable {
     public let total: Int
 }
 
+public struct BrowseResponse: Codable, Sendable {
+    public let path: String
+    public let parent: String?
+    public let items: [BrowseItem]
+}
+
+public struct BrowseItem: Codable, Identifiable, Hashable, Sendable {
+    public var id: String { path }
+    public var resolvedTitle: String { displayTitle ?? title ?? name }
+
+    public let name: String
+    public let title: String?
+    public let displayTitle: String?
+    public let path: String
+    public let kind: String
+    public let size: Int64?
+    public let modifiedAt: Double?
+    public let playable: Bool
+    public let favorite: Bool
+    public let progress: Double?
+    public let duration: Double?
+    public let position: Double?
+    public let year: Int?
+    public let season: Int?
+    public let episode: Int?
+    public let quality: String?
+    public let artworkUrl: String?
+    public let overview: String?
+    public let posterPath: String?
+    public let backdropUrl: String?
+    public let mediaType: String?
+    public let metadataSource: String?
+    public let metadataUpdatedAt: String?
+}
+
 public struct MediaItem: Codable, Identifiable, Hashable, Sendable {
     public var id: String { path }
     public var resolvedTitle: String { displayTitle ?? title ?? name }

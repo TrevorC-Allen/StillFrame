@@ -95,6 +95,10 @@ public final class StillFrameAPI: @unchecked Sendable {
         try await get("/library/facets")
     }
 
+    public func browse(path: String) async throws -> BrowseResponse {
+        try await get("/browse", query: [URLQueryItem(name: "path", value: path)])
+    }
+
     public func mediaDetails(path: String) async throws -> MediaItem {
         try await get("/media/details", query: [URLQueryItem(name: "path", value: path)])
     }
