@@ -155,6 +155,106 @@ input[type="range"] {
   background: #323027;
 }
 
+.secondary-action.scanning {
+  border-color: rgba(205, 168, 90, 0.72);
+  color: #f4f1e9;
+}
+
+.scan-status {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid #343228;
+  border-radius: 8px;
+  padding: 10px;
+  background: #151511;
+  color: #d2cdc0;
+}
+
+.scan-status[hidden] {
+  display: none;
+}
+
+.scan-status.running {
+  border-color: rgba(205, 168, 90, 0.45);
+  background: rgba(205, 168, 90, 0.08);
+}
+
+.scan-status.failed {
+  border-color: rgba(202, 105, 73, 0.45);
+  background: rgba(202, 105, 73, 0.1);
+}
+
+.scan-status-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scan-status-head strong {
+  overflow: hidden;
+  color: #fffaf0;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-status-head span {
+  flex: 0 0 auto;
+  color: #999482;
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.scan-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.scan-status-grid span {
+  min-width: 0;
+  border-radius: 7px;
+  padding: 7px 6px;
+  background: #20201b;
+}
+
+.scan-status-grid small,
+.scan-status-grid strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-status-grid small {
+  color: #8d8777;
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.scan-status-grid strong {
+  margin-top: 3px;
+  color: #f4f1e9;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+.scan-status-error {
+  overflow: hidden;
+  color: #eba180;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-status-error[hidden] {
+  display: none;
+}
+
 .source-form {
   display: flex;
   flex-direction: column;

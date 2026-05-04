@@ -37,6 +37,27 @@
             </svg>
             <span>Scan & Generate</span>
           </button>
+          <div id="scan-status" class="scan-status" role="status" aria-live="polite" hidden>
+            <div class="scan-status-head">
+              <strong id="scan-status-title">Scan ready</strong>
+              <span id="scan-status-text">Idle</span>
+            </div>
+            <div class="scan-status-grid">
+              <span>
+                <small>items_indexed</small>
+                <strong id="scan-items-indexed">0</strong>
+              </span>
+              <span>
+                <small>sources_scanned</small>
+                <strong id="scan-sources-scanned">0</strong>
+              </span>
+              <span>
+                <small>sources_skipped</small>
+                <strong id="scan-sources-skipped">0</strong>
+              </span>
+            </div>
+            <div id="scan-error" class="scan-status-error" hidden></div>
+          </div>
         </div>
 
         <form id="source-form" class="source-form compact">

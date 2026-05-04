@@ -14,6 +14,7 @@ def test_web_mvp_home_and_health() -> None:
         home = client.get("/")
         favicon = client.get("/static/favicon.svg")
         mark = client.get("/static/stillframe-mark.svg")
+        script = client.get("/static/mvp.js")
         health = client.get("/health")
 
     assert home.status_code == 200
@@ -29,6 +30,11 @@ def test_web_mvp_home_and_health() -> None:
     assert "clear-history-button" in home.text
     assert "refresh-sources-button" in home.text
     assert "scan-library-button" in home.text
+    assert "scan-status" in home.text
+    assert "scan-items-indexed" in home.text
+    assert "scan-sources-scanned" in home.text
+    assert "scan-sources-skipped" in home.text
+    assert "scan-error" in home.text
     assert "library-shelf" in home.text
     assert "library-filter" in home.text
     assert "library-sort" in home.text
@@ -51,6 +57,10 @@ def test_web_mvp_home_and_health() -> None:
     assert "Fullscreen" in home.text
     assert favicon.status_code == 200
     assert mark.status_code == 200
+    assert script.status_code == 200
+    assert "/library/scan/jobs/" in script.text
+    assert "scheduleScanPoll" in script.text
+    assert "Scan running" in script.text
     assert health.status_code == 200
     assert health.json()["ok"] is True
     assert "full_playback_available" in health.json()
