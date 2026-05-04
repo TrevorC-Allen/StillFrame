@@ -85,7 +85,8 @@ The local API listens on `http://127.0.0.1:8765`.
 - `GET /diagnostics/playback` returns platform, Python, mpv/ffmpeg presence, paths, versions, preview support, playback issues, and install hints.
 - `GET /sources`
 - `POST /sources`
-- `GET /library`
+- `GET /library` supports search, sort, and facet filters for media type, year, quality, source, favorite, and availability.
+- `GET /library/facets` returns library totals plus media type, year, quality, source, favorite, and offline counts.
 - `POST /library/scan` starts a background scan job by default.
 - `POST /library/scan?synchronous=true` or `POST /library/scan?wait=true` runs a blocking scan and returns the scan summary.
 - `GET /library/scan/jobs`

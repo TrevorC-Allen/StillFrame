@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.models.schemas import (
+    LibraryFacetsResponse,
     LibraryMetadataRefreshRequest,
     LibraryMetadataRefreshResponse,
     LibraryScanJob,
@@ -34,18 +35,35 @@ def list_library(
     limit: int = Query(100, ge=1, le=500),
     sort: str = Query("title", pattern="^(title|recent|size|year)$"),
     include_unavailable: bool = Query(False),
+    media_type: Optional[str] = Query(None, min_length=1),
+    year: Optional[int] = Query(None),
+    quality: Optional[str] = Query(None, min_length=1),
+    source_id: Optional[int] = Query(None, ge=1),
+    favorite: Optional[bool] = Query(None),
+    available: Optional[bool] = Query(None),
 ) -> dict:
     items = library_service.list_media_items(
         search=search,
         limit=limit,
         sort=sort,
         include_unavailable=include_unavailable,
+        media_type=media_type,
+        year=year,
+        quality=quality,
+        source_id=source_id,
+        favorite=favorite,
+        available=available,
     )
     for item in items:
         item["available"] = bool(item["available"])
         item["favorite"] = bool(item["favorite"])
         item["finished"] = bool(item["finished"]) if item.get("finished") is not None else False
     return {"items": items, "total": len(items)}
+
+
+@router.get("/library/facets", response_model=LibraryFacetsResponse)
+def library_facets() -> dict:
+    return library_service.library_facets()
 
 
 @router.post("/library/scan")
